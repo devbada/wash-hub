@@ -39,6 +39,9 @@ dependencies {
     // AWS S3
     implementation 'com.amazonaws:aws-java-sdk-s3:1.12.529'
 
+    // 이미지 합성 (Before/After 썸네일)
+    implementation 'net.coobird:thumbnailator:0.4.20'
+
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
