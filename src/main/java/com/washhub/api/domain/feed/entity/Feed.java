@@ -92,6 +92,16 @@ public class Feed extends BaseEntity {
         }
     }
 
+    public void increaseCommentCount() {
+        this.commentCount++;
+    }
+
+    public void decreaseCommentCount() {
+        if (this.commentCount > 0) {
+            this.commentCount--;
+        }
+    }
+
     public void addImage(FeedImage image) {
         this.images.add(image);
     }
