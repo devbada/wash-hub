@@ -36,6 +36,8 @@ public class SecurityConfig {
                     .antMatchers("/api/v1/auth/kakao").permitAll()
                     .antMatchers("/api/v1/auth/refresh").permitAll()
                     .antMatchers(HttpMethod.GET, "/api/v1/members/check-nickname").permitAll()
+                    .antMatchers(HttpMethod.GET, "/api/v1/feeds").permitAll()
+                    .antMatchers(HttpMethod.GET, "/api/v1/feeds/{feedId}").permitAll()
                     // 나머지는 인증 필요
                     .anyRequest().authenticated()
                 .and()
