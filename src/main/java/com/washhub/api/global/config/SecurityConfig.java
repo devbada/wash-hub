@@ -38,6 +38,7 @@ public class SecurityConfig {
                     .antMatchers(HttpMethod.GET, "/api/v1/members/check-nickname").permitAll()
                     .antMatchers(HttpMethod.GET, "/api/v1/feeds").permitAll()
                     .antMatchers(HttpMethod.GET, "/api/v1/feeds/{feedId}").permitAll()
+                    .antMatchers(HttpMethod.GET, "/api/v1/feeds/{feedId}/comments").permitAll()
                     // 나머지는 인증 필요
                     .anyRequest().authenticated()
                 .and()
