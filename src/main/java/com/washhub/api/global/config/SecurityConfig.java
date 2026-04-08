@@ -42,6 +42,9 @@ public class SecurityConfig {
                     .antMatchers(HttpMethod.GET, "/api/v1/equipments").permitAll()
                     .antMatchers(HttpMethod.GET, "/api/v1/equipments/search").permitAll()
                     .antMatchers(HttpMethod.GET, "/api/v1/equipments/{equipmentId}").permitAll()
+                    .antMatchers(HttpMethod.GET, "/api/v1/car-washes").permitAll()
+                    .antMatchers(HttpMethod.GET, "/api/v1/car-washes/search").permitAll()
+                    .antMatchers(HttpMethod.GET, "/api/v1/car-washes/{carWashId}").permitAll()
                     // 나머지는 인증 필요
                     .anyRequest().authenticated()
                 .and()
