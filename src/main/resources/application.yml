@@ -1,0 +1,45 @@
+spring:
+  profiles:
+    active: local
+
+  application:
+    name: wash-hub-api
+
+  # JPA 공통 설정
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        format_sql: true
+
+  # Flyway 공통 설정
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  # 파일 업로드 제한
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 30MB
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET:washhub-default-secret-key-for-local-development-only}
+  access-token-validity: 1800000    # 30분
+  refresh-token-validity: 1209600000 # 14일
+
+# 로깅
+logging:
+  level:
+    com.washhub.api: DEBUG
+    org.hibernate.SQL: DEBUG
