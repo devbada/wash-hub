@@ -7,6 +7,7 @@ struct NicknameSetupView: View {
     @State private var isDuplicate = false
     @State private var isChecked = false
     @State private var errorMessage: String?
+    @State private var showLogoutAlert = false
 
     private var isValid: Bool {
         nickname.count >= 2 && nickname.count <= 10
@@ -95,8 +96,26 @@ struct NicknameSetupView: View {
                 .disabled(!canSubmit)
                 .opacity(canSubmit ? 1.0 : 0.4)
                 .padding(.horizontal, 24)
+
+                // 로그아웃 (세션 만료/데이터 초기화 등으로 진행 불가 시)
+                Button(action: { showLogoutAlert = true }) {
+                    Text("다른 계정으로 로그인")
+                        .font(.appCaption)
+                        .foregroundColor(.theme.textDisabled)
+                        .underline()
+                }
                 .padding(.bottom, 40)
             }
+        }
+        .alert("다시 로그인하시겠습니까?", isPresented: $showLogoutAlert) {
+            Button("로그아웃", role: .destructive) {
+                Task {
+                    try? await authManager.signOut()
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("현재 세션을 종료하고 로그인 화면으로 돌아갑니다.")
         }
     }
 
@@ -124,11 +143,14 @@ struct NicknameSetupView: View {
 
     private func submit() {
         isLoading = true
+        errorMessage = nil
         Task {
             do {
                 try await authManager.updateNickname(nickname)
             } catch {
-                errorMessage = "닉네임 설정에 실패했습니다"
+                // TODO-minam: 세션 만료/FK 위반 등 구체적 에러 분기 추가 고려
+                print("닉네임 설정 에러: \(error)")
+                errorMessage = "닉네임 설정에 실패했습니다. 아래 '다른 계정으로 로그인'을 눌러 재로그인해주세요."
             }
             isLoading = false
         }

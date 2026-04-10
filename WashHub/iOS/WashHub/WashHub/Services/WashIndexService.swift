@@ -1,24 +1,54 @@
 import Foundation
-import CoreLocation
 import Combine
+import Supabase
 
 @MainActor
 final class WashIndexService: ObservableObject {
     @Published var washIndex: WashIndex?
-    @Published var isLoading = false
+    // 뷰가 처음 렌더링될 때 카드가 영(0) 높이로 접히지 않도록 true 로 초기화
+    @Published var isLoading = true
+    @Published var forecast: [DailyForecast] = []
+    @Published var isForecastLoading = false
 
-    // MARK: - 세차지수 계산 (기상청 API 기반)
-    // TODO-minam: 실제 기상청 API 키 등록 후 실제 데이터 연동
+    // MARK: - 세차지수 로드 (Supabase Edge Function 'weather-proxy' 호출)
+    // 기상청 API Hub + 에어코리아 API 키는 Edge Function Secrets 에만 보관
+    // iOS 앱에는 API 키가 포함되지 않음 (Secure Coding)
     func loadWashIndex(latitude: Double = 37.5665, longitude: Double = 126.9780) async {
         isLoading = true
 
         do {
-            // 기상청 단기예보 API 호출
-            let weatherData = try await fetchWeatherData(latitude: latitude, longitude: longitude)
-            washIndex = calculateIndex(from: weatherData)
+            let grid = convertToGrid(lat: latitude, lng: longitude)
+            let sidoName = guesssSido(lat: latitude, lng: longitude)
+
+            // Edge Function 호출 페이로드
+            struct WeatherRequest: Encodable {
+                let nx: Int
+                let ny: Int
+                let sidoName: String
+            }
+            let payload = WeatherRequest(nx: grid.x, ny: grid.y, sidoName: sidoName)
+
+            // Supabase SDK 가 자동으로 Authorization 헤더(JWT)를 포함
+            let result: WeatherProxyResponse = try await supabase.functions
+                .invoke(
+                    "weather-proxy",
+                    options: .init(body: payload)
+                )
+
+            washIndex = WashIndex(
+                score: result.score,
+                message: result.message,
+                recommendation: result.recommendation,
+                details: WashIndex.WashIndexDetails(
+                    rainProbability: result.weather.rainProbability,
+                    fineDust: result.dust.pm10,
+                    humidity: result.weather.humidity,
+                    temperature: result.weather.temperature
+                )
+            )
         } catch {
             print("WashIndex load error: \(error)")
-            // 에러 시 기본값 (날씨 데이터 없을 때)
+            // 에러 시 기본값
             washIndex = WashIndex(
                 score: 50,
                 message: "날씨 정보를 가져올 수 없습니다",
@@ -35,126 +65,35 @@ final class WashIndexService: ObservableObject {
         isLoading = false
     }
 
-    // MARK: - 기상청 API 호출
-    private func fetchWeatherData(latitude: Double, longitude: Double) async throws -> WeatherResponse {
-        // 기상청 단기예보 API URL
-        // TODO-minam: 실제 API 키로 교체
-        let apiKey = "DEMO_KEY"
-        let grid = convertToGrid(lat: latitude, lng: longitude)
+    // MARK: - 7일 예보 로드
+    func loadForecast(latitude: Double = 37.5665, longitude: Double = 126.9780) async {
+        isForecastLoading = true
 
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd"
-        let baseDate = dateFormatter.string(from: Date())
+        do {
+            let grid = convertToGrid(lat: latitude, lng: longitude)
+            let sidoName = guesssSido(lat: latitude, lng: longitude)
 
-        let hourFormatter = DateFormatter()
-        hourFormatter.dateFormat = "HH"
-        let currentHour = Int(hourFormatter.string(from: Date())) ?? 6
-        // 기상청 발표 시간: 02, 05, 08, 11, 14, 17, 20, 23
-        let baseTimes = [2, 5, 8, 11, 14, 17, 20, 23]
-        let baseTime = baseTimes.last(where: { $0 <= currentHour }) ?? 23
-        let baseTimeStr = String(format: "%02d00", baseTime)
-
-        let urlString = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=\(apiKey)&numOfRows=50&pageNo=1&dataType=JSON&base_date=\(baseDate)&base_time=\(baseTimeStr)&nx=\(grid.x)&ny=\(grid.y)"
-
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try JSONDecoder().decode(WeatherAPIResponse.self, from: data)
-
-        // API 응답 파싱
-        var rain = 0
-        var humidity = 50
-        var temp = 20.0
-
-        for item in response.response.body.items.item {
-            switch item.category {
-            case "POP": rain = Int(item.fcstValue) ?? 0          // 강수확률
-            case "REH": humidity = Int(item.fcstValue) ?? 50     // 습도
-            case "TMP": temp = Double(item.fcstValue) ?? 20      // 기온
-            default: break
+            struct ForecastRequest: Encodable {
+                let nx: Int
+                let ny: Int
+                let sidoName: String
+                let mode: String
             }
+            let payload = ForecastRequest(nx: grid.x, ny: grid.y, sidoName: sidoName, mode: "forecast")
+
+            let result: ForecastProxyResponse = try await supabase.functions
+                .invoke(
+                    "weather-proxy",
+                    options: .init(body: payload)
+                )
+
+            forecast = result.forecasts
+        } catch {
+            print("Forecast load error: \(error)")
+            forecast = []
         }
 
-        return WeatherResponse(rainProbability: rain, humidity: humidity, temperature: temp, fineDust: 30)
-    }
-
-    // MARK: - 세차지수 계산 (룰 기반)
-    private func calculateIndex(from weather: WeatherResponse) -> WashIndex {
-        var score = 100
-
-        // 강수확률
-        if weather.rainProbability > 80 {
-            score -= 60
-        } else if weather.rainProbability > 60 {
-            score -= 40
-        } else if weather.rainProbability > 40 {
-            score -= 20
-        } else if weather.rainProbability > 20 {
-            score -= 10
-        }
-
-        // 미세먼지 (PM10 기준: 좋음 0-30, 보통 31-80, 나쁨 81-150, 매우나쁨 151+)
-        if weather.fineDust > 150 {
-            score -= 30
-        } else if weather.fineDust > 80 {
-            score -= 20
-        } else if weather.fineDust > 50 {
-            score -= 10
-        }
-
-        // 습도
-        if weather.humidity > 90 {
-            score -= 15
-        } else if weather.humidity > 80 {
-            score -= 10
-        } else if weather.humidity > 70 {
-            score -= 5
-        }
-
-        // 기온 (너무 춥거나 더우면 감점)
-        if weather.temperature < 0 {
-            score -= 15
-        } else if weather.temperature < 5 {
-            score -= 10
-        } else if weather.temperature > 35 {
-            score -= 10
-        }
-
-        score = max(score, 0)
-
-        let message: String
-        let recommendation: String
-        switch score {
-        case 80...100:
-            message = "세차하기 완벽한 날!"
-            recommendation = "지금 바로 세차하세요"
-        case 60..<80:
-            message = "세차하기 좋은 날"
-            recommendation = weather.humidity > 70 ? "낮 시간대를 추천합니다" : "아무 때나 OK"
-        case 40..<60:
-            message = "세차 가능하지만 주의"
-            recommendation = weather.rainProbability > 40 ? "비 예보를 확인하세요" : "미세먼지에 유의하세요"
-        case 20..<40:
-            message = "세차 비추천"
-            recommendation = "내일 날씨를 확인해보세요"
-        default:
-            message = "오늘은 세차를 쉬세요"
-            recommendation = "비가 와도 세차? 오늘은 참으세요 😅"
-        }
-
-        return WashIndex(
-            score: score,
-            message: message,
-            recommendation: recommendation,
-            details: WashIndex.WashIndexDetails(
-                rainProbability: weather.rainProbability,
-                fineDust: weather.fineDust,
-                humidity: weather.humidity,
-                temperature: weather.temperature
-            )
-        )
+        isForecastLoading = false
     }
 
     // MARK: - 위경도 → 기상청 격자 변환
@@ -194,33 +133,110 @@ final class WashIndexService: ObservableObject {
         let y = Int(ro - ra * cos(theta) + YO + 0.5)
         return (x, y)
     }
+
+    // MARK: - 위경도 → 시도 추정 (에어코리아 시도별 조회용)
+    // TODO-minam: Phase 2 에서 CLLocationManager + 역지오코딩으로 정확한 시도 판별
+    private func guesssSido(lat: Double, lng: Double) -> String {
+        // 주요 광역시/도 중심 좌표 기준 가장 가까운 시도 반환
+        let sidos: [(name: String, lat: Double, lng: Double)] = [
+            ("서울", 37.5665, 126.9780),
+            ("부산", 35.1796, 129.0756),
+            ("대구", 35.8714, 128.6014),
+            ("인천", 37.4563, 126.7052),
+            ("광주", 35.1595, 126.8526),
+            ("대전", 36.3504, 127.3845),
+            ("울산", 35.5384, 129.3114),
+            ("세종", 36.4800, 127.0000),
+            ("경기", 37.2750, 127.0094),
+            ("강원", 37.8228, 128.1555),
+            ("충북", 36.6357, 127.4912),
+            ("충남", 36.5184, 126.8000),
+            ("전북", 35.8203, 127.1089),
+            ("전남", 34.8161, 126.4629),
+            ("경북", 36.4919, 128.8889),
+            ("경남", 35.4606, 128.2132),
+            ("제주", 33.4996, 126.5312),
+        ]
+
+        var closest = "서울"
+        var minDist = Double.greatestFiniteMagnitude
+        for sido in sidos {
+            let dist = pow(lat - sido.lat, 2) + pow(lng - sido.lng, 2)
+            if dist < minDist {
+                minDist = dist
+                closest = sido.name
+            }
+        }
+        return closest
+    }
 }
 
-// MARK: - 기상청 API 응답 모델
-private struct WeatherResponse {
+// MARK: - Forecast 응답 모델
+struct DailyForecast: Codable, Identifiable {
+    var id: String { date }
+    let date: String           // "2026-04-10"
+    let dayLabel: String       // "오늘", "내일", "모레", ""
+    let dayOfWeek: String      // "월","화",...
     let rainProbability: Int
     let humidity: Int
-    let temperature: Double
-    let fineDust: Int
+    let tempMin: Int
+    let tempMax: Int
+    let sky: Int               // 1:맑음 3:구름많음 4:흐림
+    let pty: Int               // 0:없음 1:비 ...
+    let dustGrade: String      // "좋음","보통","나쁨","매우나쁨"
+    let dustPm10: Int
+    let score: Int
+    let grade: String
+    let message: String
+
+    /// 날씨 SF Symbol
+    var weatherIcon: String {
+        if pty > 0 {
+            switch pty {
+            case 3: return "cloud.snow.fill"
+            default: return "cloud.rain.fill"
+            }
+        }
+        switch sky {
+        case 1: return "sun.max.fill"
+        case 3: return "cloud.sun.fill"
+        default: return "cloud.fill"
+        }
+    }
+
+    /// 날짜 포맷: "4/10"
+    var shortDate: String {
+        let parts = date.split(separator: "-")
+        guard parts.count == 3 else { return date }
+        let month = Int(parts[1]) ?? 0
+        let day = Int(parts[2]) ?? 0
+        return "\(month)/\(day)"
+    }
 }
 
-private struct WeatherAPIResponse: Codable {
-    let response: WeatherAPIBody
+private struct ForecastProxyResponse: Codable {
+    let forecasts: [DailyForecast]
 }
 
-private struct WeatherAPIBody: Codable {
-    let body: WeatherAPIBodyContent
-}
+// MARK: - Edge Function 응답 모델
+private struct WeatherProxyResponse: Codable {
+    let weather: WeatherData
+    let dust: DustData
+    let score: Int
+    let message: String
+    let recommendation: String
+    let grade: String
 
-private struct WeatherAPIBodyContent: Codable {
-    let items: WeatherAPIItems
-}
+    struct WeatherData: Codable {
+        let rainProbability: Int
+        let humidity: Int
+        let temperature: Double
+        let sky: Int
+        let pty: Int
+    }
 
-private struct WeatherAPIItems: Codable {
-    let item: [WeatherAPIItem]
-}
-
-private struct WeatherAPIItem: Codable {
-    let category: String
-    let fcstValue: String
+    struct DustData: Codable {
+        let pm10: Int
+        let pm25: Int
+    }
 }

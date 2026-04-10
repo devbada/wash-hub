@@ -36,16 +36,45 @@ struct FeedListView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4)
 
-                    // 컨텐츠
-                    ZStack {
-                        if feedService.isLoading && feedService.feeds.isEmpty {
-                            ProgressView()
-                                .tint(.theme.secondary)
-                        } else if feedService.feeds.isEmpty {
-                            emptyView
-                        } else {
-                            feedList
+                    // 컨텐츠 — 세차지수 위젯은 피드 유무와 무관하게 항상 상단 노출
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            // 세차지수 위젯 (피드가 없어도 표시)
+                            WashIndexCard()
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
+
+                            if feedService.isLoading && feedService.feeds.isEmpty {
+                                ProgressView()
+                                    .tint(.theme.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 40)
+                            } else if feedService.feeds.isEmpty {
+                                emptyView
+                                    .padding(.top, 20)
+                            } else {
+                                ForEach(feedService.feeds) { feed in
+                                    NavigationLink(destination: FeedDetailView(feedId: feed.id)) {
+                                        FeedCard(feed: feed)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, 16)
+                                    .onAppear {
+                                        if feed.id == feedService.feeds.last?.id {
+                                            currentOffset += 10
+                                            Task {
+                                                await feedService.loadFeeds(offset: currentOffset)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        .padding(.bottom, 16)
+                    }
+                    .refreshable {
+                        currentOffset = 0
+                        await feedService.loadFeeds()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -122,39 +151,6 @@ struct FeedListView: View {
         )
     }
 
-    // MARK: - 피드 리스트
-    private var feedList: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                // 세차지수 위젯
-                WashIndexCard()
-                    .padding(.bottom, 4)
-
-                ForEach(feedService.feeds) { feed in
-                    NavigationLink(destination: FeedDetailView(feedId: feed.id)) {
-                        FeedCard(feed: feed)
-                    }
-                    .buttonStyle(.plain)
-                    .onAppear {
-                        // 마지막 아이템 도달 시 다음 페이지 로드
-                        if feed.id == feedService.feeds.last?.id {
-                            currentOffset += 10
-                            Task {
-                                await feedService.loadFeeds(offset: currentOffset)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-        }
-        .refreshable {
-            currentOffset = 0
-            await feedService.loadFeeds()
-        }
-    }
-
     // MARK: - 빈 화면
     private var emptyView: some View {
         VStack(spacing: 16) {
@@ -177,10 +173,23 @@ struct FeedListView: View {
 struct FeedCard: View {
     let feed: Feed
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 썸네일
-            AsyncImage(url: URL(string: feed.thumbnailUrl ?? "")) { phase in
+    /// 썸네일이 유효한 URL 인지 판단
+    private var hasValidThumbnail: Bool {
+        guard let raw = feed.thumbnailUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              let url = URL(string: raw),
+              let scheme = url.scheme,
+              scheme.hasPrefix("http") else {
+            return false
+        }
+        return true
+    }
+
+    /// 썸네일 뷰 — 유효한 URL 이 있을 때만 AsyncImage 를 사용하고, 그 외에는 정적 placeholder
+    @ViewBuilder
+    private var thumbnailView: some View {
+        if hasValidThumbnail, let url = URL(string: feed.thumbnailUrl!) {
+            AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
                     image
@@ -190,27 +199,46 @@ struct FeedCard: View {
                     Rectangle()
                         .fill(Color.theme.surface)
                         .overlay(
-                            Image(systemName: "photo")
-                                .font(.system(size: 40))
-                                .foregroundColor(.theme.textDisabled)
+                            ProgressView()
+                                .tint(.theme.textDisabled)
                         )
                 case .failure:
-                    Rectangle()
-                        .fill(Color.theme.surface)
-                        .overlay(
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(.theme.textDisabled)
-                        )
+                    thumbnailPlaceholder
                 @unknown default:
-                    Rectangle().fill(Color.theme.surface)
+                    thumbnailPlaceholder
                 }
             }
-            .frame(height: 200)
-            .clipped()
+        } else {
+            thumbnailPlaceholder
+        }
+    }
+
+    /// thumbnail_url 이 없을 때 사용하는 정적 placeholder
+    private var thumbnailPlaceholder: some View {
+        Rectangle()
+            .fill(Color.theme.surface)
+            .overlay(
+                VStack(spacing: 8) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 40))
+                        .foregroundColor(.theme.textDisabled)
+                    Text("이미지 없음")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textDisabled)
+                }
+            )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 썸네일 — thumbnail_url 이 nil/empty 또는 잘못된 URL 이면 placeholder 표시
+            thumbnailView
+                .frame(height: 200)
+                .clipped()
 
             // 정보 영역
             VStack(alignment: .leading, spacing: 8) {
-                // 작성자
+                // 작성자 — avatar_url 이 유효하지 않으면 placeholder
                 HStack(spacing: 8) {
                     AsyncImage(url: URL(string: feed.profiles?.avatarUrl ?? "")) { phase in
                         switch phase {

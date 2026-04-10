@@ -14,6 +14,7 @@ struct Feed: Identifiable, Codable {
     let thumbnailUrl: String?
     let createdAt: String
     let updatedAt: String
+    let isEdited: Bool
 
     /// JOIN 시 작성자 프로필
     var profiles: Profile?
@@ -32,6 +33,7 @@ struct Feed: Identifiable, Codable {
         case thumbnailUrl = "thumbnail_url"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case isEdited = "is_edited"
         case profiles
         case myCars = "my_cars"
     }

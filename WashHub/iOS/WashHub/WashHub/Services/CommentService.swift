@@ -49,9 +49,13 @@ final class CommentService: ObservableObject {
 
     // MARK: - 댓글 수정 (5분 이내만 가능)
     func updateComment(commentId: String, feedId: String, content: String) async throws {
+        struct CommentUpdate: Encodable {
+            let content: String
+            let is_edited: Bool
+        }
         try await supabase
             .from("comments")
-            .update(["content": content])
+            .update(CommentUpdate(content: content, is_edited: true))
             .eq("id", value: commentId)
             .execute()
 

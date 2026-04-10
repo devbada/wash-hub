@@ -421,9 +421,10 @@ struct CreateFeedView: View {
 
         Task {
             do {
-                let beforeData = beforeImages.compactMap { $0.jpegData(compressionQuality: 0.8) }
-                let afterData = afterImages.compactMap { $0.jpegData(compressionQuality: 0.8) }
-                let extraData = extraImages.compactMap { $0.jpegData(compressionQuality: 0.8) }
+                // 피드 사진은 Before/After 비교용이라 해상도를 상대적으로 높게 유지 (긴 변 1920px, 3MB)
+                let beforeData = beforeImages.compactMap { $0.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) }
+                let afterData = afterImages.compactMap { $0.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) }
+                let extraData = extraImages.compactMap { $0.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) }
 
                 _ = try await feedService.createFeed(
                     title: title.isEmpty ? nil : title,

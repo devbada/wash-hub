@@ -1,4 +1,45 @@
 import SwiftUI
+import UIKit
+
+// MARK: - UIImage 리사이즈/압축 유틸
+// 원본 iPhone 사진은 쉽게 10-20MB 에 달해 Supabase Storage 제한(5MB)을 초과한다.
+// 업로드 전에 긴 변 기준 리사이즈 + JPEG 품질 단계적 축소로 타겟 용량 이하를 보장한다.
+extension UIImage {
+
+    /// 긴 변이 `maxDimension` 이하가 되도록 비율 유지 리사이즈.
+    func resized(maxDimension: CGFloat = 1024) -> UIImage {
+        let longestSide = max(size.width, size.height)
+        guard longestSide > maxDimension else { return self }
+
+        let scale = maxDimension / longestSide
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
+
+    /// `maxBytes` 이하의 JPEG Data 로 인코딩 (리사이즈 + 품질 단계 축소).
+    /// - Parameters:
+    ///   - maxDimension: 긴 변 최대 픽셀 수 (default 1024)
+    ///   - maxBytes: 허용 최대 바이트 수 (default 2MB)
+    func jpegDataUnder(maxDimension: CGFloat = 1024, maxBytes: Int = 2 * 1024 * 1024) -> Data? {
+        let resizedImage = self.resized(maxDimension: maxDimension)
+        let qualities: [CGFloat] = [0.85, 0.7, 0.55, 0.4, 0.25]
+
+        for quality in qualities {
+            if let data = resizedImage.jpegData(compressionQuality: quality),
+               data.count <= maxBytes {
+                return data
+            }
+        }
+        // 최저 품질로도 실패 시 — 호출 측에서 사이즈 재검증 필요
+        return resizedImage.jpegData(compressionQuality: 0.25)
+    }
+}
 
 // MARK: - 공통 View Modifier (Electric Neon Premium Design System)
 extension View {

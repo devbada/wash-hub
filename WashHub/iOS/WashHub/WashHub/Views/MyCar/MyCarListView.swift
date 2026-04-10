@@ -264,13 +264,13 @@ struct AddMyCarView: View {
                 let carId = UUID().uuidString
                 var imageUrl: String?
 
-                // 차량 사진 업로드
+                // 차량 사진 업로드 — 긴 변 1600px / 2.5MB 이하로 최적화
                 if let image = carImage,
-                   let imageData = image.jpegData(compressionQuality: 0.8) {
+                   let imageData = image.jpegDataUnder(maxDimension: 1600, maxBytes: 2_500_000) {
                     let path = "\(session.user.id.uuidString)/\(carId).jpg"
                     try await supabase.storage
                         .from("my-cars")
-                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg"))
+                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg", upsert: true))
                     imageUrl = try supabase.storage
                         .from("my-cars")
                         .getPublicURL(path: path).absoluteString

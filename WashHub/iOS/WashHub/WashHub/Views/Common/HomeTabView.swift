@@ -55,7 +55,7 @@ struct HomeTabView: View {
                     }
                     .tag(1)
 
-                // 4. 케미컬/세차장 탭 (게스트 허용)
+                // 4. 케미컬 탭 (게스트 허용) — 세차장 진입점은 툴바에서 제공
                 EquipmentListView()
                     .tabItem {
                         Image(systemName: "drop.circle")
@@ -167,3 +167,4 @@ private struct FABPressStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
+

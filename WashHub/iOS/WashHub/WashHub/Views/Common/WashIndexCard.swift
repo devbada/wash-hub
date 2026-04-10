@@ -2,18 +2,40 @@ import SwiftUI
 
 struct WashIndexCard: View {
     @StateObject private var washIndexService = WashIndexService()
+    @State private var showForecast = false
 
     var body: some View {
         Group {
-            if washIndexService.isLoading {
-                loadingView
-            } else if let index = washIndexService.washIndex {
+            if let index = washIndexService.washIndex {
                 indexCard(index)
+                    .onTapGesture { showForecast = true }
+            } else if washIndexService.isLoading {
+                loadingView
+            } else {
+                placeholderView
             }
         }
         .task {
             await washIndexService.loadWashIndex()
         }
+        .fullScreenCover(isPresented: $showForecast) {
+            WashForecastView()
+        }
+    }
+
+    private var placeholderView: some View {
+        HStack {
+            Image(systemName: "cloud.sun")
+                .font(.system(size: 20))
+                .foregroundColor(.theme.textDisabled)
+            Text("세차지수를 불러올 수 없습니다")
+                .font(.appSmall)
+                .foregroundColor(.theme.textDisabled)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(Color.theme.surfaceLow)
+        .cornerRadius(16)
     }
 
     private var loadingView: some View {
@@ -67,6 +89,7 @@ struct WashIndexCard: View {
                         weatherItem(icon: "thermometer", value: "온도 \(String(format: "%.0f°C", index.details.temperature))")
                     }
                 }
+                .padding(.leading, 8) // Speed-line 과 텍스트 겹침 방지
 
                 Spacer()
 
@@ -81,8 +104,22 @@ struct WashIndexCard: View {
                     .frame(width: 2, height: 48)
                 Spacer()
             }
+
         }
         .padding(20)
+        .overlay(
+            // 하단 우측: 7일 예보 힌트 (카드 밖 overlay로 점수와 겹치지 않게)
+            HStack(spacing: 3) {
+                Text("7일 예보")
+                    .font(.system(size: 10, weight: .bold))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundColor(.theme.textDisabled)
+            .padding(.trailing, 20)
+            .padding(.bottom, 6)
+            , alignment: .bottomTrailing
+        )
         .background(Color.theme.surfaceLow)
         .cornerRadius(16)
         .ambientGlow(color: scoreColor(index.score), radius: 20, opacity: 0.08)

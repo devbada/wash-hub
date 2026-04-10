@@ -13,6 +13,9 @@ struct FeedDetailView: View {
     @State private var isLiked = false
     @State private var newComment = ""
     @State private var showLoginAlert = false
+    @State private var showDeleteConfirm = false
+    @State private var showEditSheet = false
+    @Environment(\.presentationMode) var presentationMode
     @FocusState private var isCommentFocused: Bool
 
     var body: some View {
@@ -65,6 +68,38 @@ struct FeedDetailView: View {
         } message: {
             Text("좋아요와 댓글은 로그인 후 이용할 수 있습니다.")
         }
+        .alert("피드 삭제", isPresented: $showDeleteConfirm) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) {
+                Task {
+                    do {
+                        try await feedService.deleteFeed(id: feedId)
+                        NotificationCenter.default.post(
+                            name: .feedCountChanged,
+                            object: nil
+                        )
+                        presentationMode.wrappedValue.dismiss()
+                    } catch {
+                        print("Feed delete error: \(error)")
+                    }
+                }
+            }
+        } message: {
+            Text("이 피드를 삭제하시겠습니까? 삭제된 피드는 복구할 수 없습니다.")
+        }
+        .sheet(isPresented: $showEditSheet) {
+            if let feed = feed {
+                EditFeedView(feed: feed, feedService: feedService) { updatedFeed in
+                    self.feed = updatedFeed
+                    // 피드 목록에도 변경 알림
+                    NotificationCenter.default.post(
+                        name: .feedCountChanged,
+                        object: nil,
+                        userInfo: ["feedId": feedId]
+                    )
+                }
+            }
+        }
         .task {
             feed = await feedService.loadFeed(id: feedId)
             let images = await feedService.loadFeedImages(feedId: feedId)
@@ -105,6 +140,12 @@ struct FeedDetailView: View {
         }
     }
 
+    /// 현재 사용자가 이 피드의 작성자인지 확인
+    private var isMyFeed: Bool {
+        guard let userId = authManager.currentUser?.id else { return false }
+        return feed?.userId == userId
+    }
+
     // MARK: - 피드 정보
     private func feedInfoSection(_ feed: Feed) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -142,13 +183,39 @@ struct FeedDetailView: View {
                             .foregroundColor(.theme.textSecondary)
                     }
                 }
+
+                // 수정/삭제 메뉴 (본인 글만)
+                if isMyFeed {
+                    Menu {
+                        Button(action: { showEditSheet = true }) {
+                            Label("수정", systemImage: "pencil")
+                        }
+                        Button(role: .destructive, action: {
+                            showDeleteConfirm = true
+                        }) {
+                            Label("삭제", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16))
+                            .foregroundColor(.theme.textSecondary)
+                            .frame(width: 32, height: 32)
+                    }
+                }
             }
 
             // 제목
             if let title = feed.title, !title.isEmpty {
-                Text(title)
-                    .font(.appHeadline2)
-                    .foregroundColor(.theme.textPrimary)
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.appHeadline2)
+                        .foregroundColor(.theme.textPrimary)
+                    if feed.isEdited {
+                        Text("(편집됨)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.theme.textDisabled)
+                    }
+                }
             }
 
             // 내용
@@ -156,6 +223,25 @@ struct FeedDetailView: View {
                 Text(content)
                     .font(.appBody)
                     .foregroundColor(.theme.textSecondary)
+            }
+
+            // 차량 정보
+            if let car = feed.myCars {
+                HStack(spacing: 6) {
+                    Image(systemName: "car.fill")
+                        .font(.system(size: 12))
+                    Text(car.carModel)
+                        .font(.appCaptionMedium)
+                    if let color = car.carColor {
+                        Text("· \(color)")
+                            .font(.appCaption)
+                    }
+                    if let year = car.carYear {
+                        Text("· \(year)년")
+                            .font(.appCaption)
+                    }
+                }
+                .foregroundColor(.theme.tertiary)
             }
 
             // 장소 / 세차 방법
@@ -391,9 +477,16 @@ struct CommentRow: View {
                         }
                     }
                 } else {
-                    Text(comment.content)
-                        .font(.appCaption)
-                        .foregroundColor(.theme.textSecondary)
+                    HStack(spacing: 4) {
+                        Text(comment.content)
+                            .font(.appCaption)
+                            .foregroundColor(.theme.textSecondary)
+                        if comment.isEdited {
+                            Text("(편집됨)")
+                                .font(.system(size: 10))
+                                .foregroundColor(.theme.textDisabled)
+                        }
+                    }
                 }
             }
         }
@@ -425,5 +518,152 @@ struct CommentRow: View {
         if interval < 86400 { return "\(Int(interval / 3600))시간 전" }
         if interval < 604800 { return "\(Int(interval / 86400))일 전" }
         return String(dateString.prefix(10))
+    }
+}
+
+// MARK: - 피드 수정
+struct EditFeedView: View {
+    @Environment(\.dismiss) var dismiss
+    let feed: Feed
+    @ObservedObject var feedService: FeedService
+    var onUpdated: (Feed) -> Void
+
+    @State private var title: String
+    @State private var content: String
+    @State private var location: String
+    @State private var washMethod: String
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    init(feed: Feed, feedService: FeedService, onUpdated: @escaping (Feed) -> Void) {
+        self.feed = feed
+        self.feedService = feedService
+        self.onUpdated = onUpdated
+        _title = State(initialValue: feed.title ?? "")
+        _content = State(initialValue: feed.content ?? "")
+        _location = State(initialValue: feed.location ?? "")
+        _washMethod = State(initialValue: feed.washMethod ?? "")
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.theme.surface
+                    .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // 제목
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("제목")
+                                .font(.appLabel)
+                                .foregroundColor(.theme.textSecondary)
+                            TextField("세차 제목을 입력하세요", text: $title)
+                                .washHubTextField()
+                        }
+
+                        // 내용
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("내용")
+                                .font(.appLabel)
+                                .foregroundColor(.theme.textSecondary)
+                            TextEditor(text: $content)
+                                .font(.appBody)
+                                .foregroundColor(.theme.textPrimary)
+                                .frame(minHeight: 120)
+                                .padding(12)
+                                .background(Color.theme.surface)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.theme.border, lineWidth: 1)
+                                )
+                                .onAppear {
+                                    UITextView.appearance().backgroundColor = .clear
+                                }
+                        }
+
+                        // 장소
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("세차 장소 (선택)")
+                                .font(.appLabel)
+                                .foregroundColor(.theme.textSecondary)
+                            TextField("장소를 입력하세요", text: $location)
+                                .washHubTextField()
+                        }
+
+                        // 세차 방법
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("세차 방법 (선택)")
+                                .font(.appLabel)
+                                .foregroundColor(.theme.textSecondary)
+                            TextField("예: 셀프 손세차, 자동세차 등", text: $washMethod)
+                                .washHubTextField()
+                        }
+
+                        if let errorMessage = errorMessage {
+                            Text(errorMessage)
+                                .font(.appSmall)
+                                .foregroundColor(.theme.error)
+                        }
+
+                        // 저장 버튼
+                        Button(action: save) {
+                            if isLoading {
+                                ProgressView()
+                                    .tint(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                            } else {
+                                Text("저장").primaryButtonStyle()
+                            }
+                        }
+                        .disabled(title.isEmpty || isLoading)
+                        .opacity(title.isEmpty ? 0.4 : 1.0)
+                    }
+                    .padding(16)
+                }
+                .onTapGesture {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
+            }
+            .navigationTitle("피드 수정")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("취소") { dismiss() }
+                        .foregroundColor(.theme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                try await feedService.updateFeed(
+                    id: feed.id,
+                    title: title.isEmpty ? nil : title,
+                    content: content.isEmpty ? nil : content,
+                    location: location.isEmpty ? nil : location,
+                    washMethod: washMethod.isEmpty ? nil : washMethod
+                )
+                // 수정된 피드를 다시 로드
+                if let updatedFeed = await feedService.loadFeed(id: feed.id) {
+                    onUpdated(updatedFeed)
+                }
+                dismiss()
+            } catch {
+                errorMessage = "수정에 실패했습니다: \(error.localizedDescription)"
+                print("Feed update error: \(error)")
+            }
+            isLoading = false
+        }
     }
 }

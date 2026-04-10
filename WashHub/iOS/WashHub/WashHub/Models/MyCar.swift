@@ -33,6 +33,7 @@ struct WashLog: Identifiable, Codable {
     let userId: String
     let carId: String
     let carWashId: String?
+    let feedId: String?
     let washDate: String
     let memo: String?
     let status: String
@@ -44,6 +45,7 @@ struct WashLog: Identifiable, Codable {
         case userId = "user_id"
         case carId = "car_id"
         case carWashId = "car_wash_id"
+        case feedId = "feed_id"
         case washDate = "wash_date"
         case memo, status
         case createdAt = "created_at"

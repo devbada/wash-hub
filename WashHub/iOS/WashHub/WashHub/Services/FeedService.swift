@@ -187,7 +187,11 @@ final class FeedService: ObservableObject {
                 .execute()
         }
 
-        // 5. 썸네일 URL 업데이트 — DB 트리거가 백업 역할도 하지만 즉시성을 위해 직접 호출
+        // 5. 썸네일 URL 업데이트
+        // feed_images 트리거(`feed_images_refresh_thumbnail`) 가 자동으로 채우지만
+        // 즉시성을 위해 클라이언트에서도 한 번 더 갱신 시도.
+        // 실패해도 트리거가 이미 채워놓았을 것이므로 throw 하지 않고 로그만 남김.
+        // TODO-minam: RLS 정책으로 feeds.update 가 반복 실패하면 로그 분석 필요
         if let thumbnailUrl = thumbnailUrl {
             do {
                 try await supabase
@@ -196,12 +200,66 @@ final class FeedService: ObservableObject {
                     .eq("id", value: feedId)
                     .execute()
             } catch {
-                // 실패해도 트리거가 채워주므로 로그만 남김
-                print("⚠️ thumbnail_url 직접 업데이트 실패 (트리거가 처리): \(error)")
+                print("⚠️ thumbnail_url 직접 업데이트 실패 (DB 트리거가 fallback 처리): \(error)")
+            }
+        }
+
+        // 6. 차량이 선택된 경우 wash_logs 에 세차기록 자동 생성
+        if let carId = carId {
+            do {
+                let today = ISO8601DateFormatter.string(
+                    from: Date(),
+                    timeZone: TimeZone(identifier: "Asia/Seoul") ?? .current,
+                    formatOptions: [.withFullDate, .withDashSeparatorInDate]
+                )
+                try await supabase
+                    .from("wash_logs")
+                    .insert([
+                        "user_id": session.user.id.uuidString,
+                        "car_id": carId,
+                        "feed_id": feedId,
+                        "wash_date": today,
+                        "memo": title ?? "피드에서 자동 생성",
+                        "status": "ACTIVE"
+                    ])
+                    .execute()
+            } catch {
+                // TODO-minam: wash_log 자동 생성 실패 시 로그 분석 필요
+                print("⚠️ wash_log 자동 생성 실패 (피드 자체는 정상): \(error)")
             }
         }
 
         return feedId
+    }
+
+    // MARK: - 피드 수정
+    func updateFeed(
+        id: String,
+        title: String?,
+        content: String?,
+        location: String?,
+        washMethod: String?
+    ) async throws {
+        struct FeedUpdate: Encodable {
+            let title: String
+            let content: String
+            let location: String
+            let wash_method: String
+            let is_edited: Bool
+        }
+        let payload = FeedUpdate(
+            title: title ?? "",
+            content: content ?? "",
+            location: location ?? "",
+            wash_method: washMethod ?? "",
+            is_edited: true
+        )
+
+        try await supabase
+            .from("feeds")
+            .update(payload)
+            .eq("id", value: id)
+            .execute()
     }
 
     // MARK: - 피드 삭제 (소프트 삭제)
@@ -211,6 +269,18 @@ final class FeedService: ObservableObject {
             .update(["status": "DELETED"])
             .eq("id", value: id)
             .execute()
+
+        // 연결된 wash_log 도 소프트 삭제
+        do {
+            try await supabase
+                .from("wash_logs")
+                .update(["status": "DELETED"])
+                .eq("feed_id", value: id)
+                .execute()
+        } catch {
+            // TODO-minam: 피드 삭제는 성공했으나 wash_log 삭제 실패 시 로그 분석
+            print("⚠️ wash_log 연동 삭제 실패: \(error)")
+        }
 
         feeds.removeAll { $0.id == id }
     }

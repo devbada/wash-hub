@@ -109,6 +109,10 @@ struct FollowRoutineView: View {
             .task {
                 await startOrRestore()
             }
+            .onDisappear {
+                // 방어적 타이머 정리 (dismiss 경로가 여러개라 명시적 cleanup)
+                stopTimer()
+            }
         }
     }
 
@@ -258,8 +262,10 @@ struct FollowRoutineView: View {
                     .cornerRadius(12)
                     .shadow(color: Color.theme.secondary.opacity(0.3), radius: 10, x: 0, y: 4)
             }
-            .disabled(!executionService.isCompleted)
-            .opacity(executionService.isCompleted ? 1.0 : 0.4)
+            // 진행 중(실행 시작됨 && 아직 완료되지 않음)이면 언제든 수동 완료 가능.
+            // 체크리스트 일부만 완료해도 사용자가 즉시 마무리할 수 있도록 열어둔다.
+            .disabled(!isStarted || executionService.isCompleted)
+            .opacity(!isStarted || executionService.isCompleted ? 0.4 : 1.0)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -281,6 +287,12 @@ struct FollowRoutineView: View {
     private func startOrRestore() async {
         if let _ = await executionService.restoreInProgress(routineId: routine.id) {
             isStarted = true
+            // 진행 중이던 실행을 복원한 경우: started_at 부터 현재까지의 경과 시간 반영
+            if let startedAtString = executionService.currentExecution?.startedAt,
+               let startedDate = parseISO8601(startedAtString) {
+                let elapsed = max(0, Int(Date().timeIntervalSince(startedDate)))
+                elapsedSeconds = elapsed
+            }
             startTimer()
             return
         }
@@ -295,6 +307,17 @@ struct FollowRoutineView: View {
         } catch {
             print("Start execution error: \(error)")
         }
+    }
+
+    /// Supabase 에서 넘어오는 ISO8601 문자열 파싱 (fractional seconds 포함/미포함 모두 지원)
+    private func parseISO8601(_ str: String) -> Date? {
+        let formatter1 = ISO8601DateFormatter()
+        formatter1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter1.date(from: str) { return date }
+
+        let formatter2 = ISO8601DateFormatter()
+        formatter2.formatOptions = [.withInternetDateTime]
+        return formatter2.date(from: str)
     }
 
     private func startTimer() {

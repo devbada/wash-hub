@@ -89,29 +89,28 @@ final class RoutineExecutionService: ObservableObject {
         guard let index = executionSteps.firstIndex(where: { $0.id == executionStepId }) else { return }
 
         let newCompleted = !executionSteps[index].completed
+        let nowString: String? = newCompleted ? ISO8601DateFormatter().string(from: Date()) : nil
+
+        // Encodable payload — completed_at 을 explicit null 로 넘겨야 체크 해제 시 값 정리됨
+        struct StepUpdate: Encodable {
+            let completed: Bool
+            let completed_at: String?
+        }
+        let payload = StepUpdate(completed: newCompleted, completed_at: nowString)
 
         do {
-            if newCompleted {
-                let now = ISO8601DateFormatter().string(from: Date())
-                try await supabase
-                    .from("routine_execution_steps")
-                    .update(["completed": "true", "completed_at": now])
-                    .eq("id", value: executionStepId)
-                    .execute()
-            } else {
-                try await supabase
-                    .from("routine_execution_steps")
-                    .update(["completed": "false"])
-                    .eq("id", value: executionStepId)
-                    .execute()
-            }
+            try await supabase
+                .from("routine_execution_steps")
+                .update(payload)
+                .eq("id", value: executionStepId)
+                .execute()
 
             executionSteps[index] = RoutineExecutionStep(
                 id: executionSteps[index].id,
                 executionId: executionSteps[index].executionId,
                 stepId: executionSteps[index].stepId,
                 completed: newCompleted,
-                completedAt: newCompleted ? ISO8601DateFormatter().string(from: Date()) : nil
+                completedAt: nowString
             )
 
             // 모든 step 완료 시 자동 완료 처리

@@ -10,6 +10,8 @@ struct MyPageView: View {
     @State private var showEditProfile = false
     @State private var showLogoutConfirm = false
     @State private var showWithdrawConfirm = false
+    @State private var isWithdrawing = false
+    @State private var withdrawError: String?
     @State private var isLoading = true
 
     var body: some View {
@@ -274,12 +276,60 @@ struct MyPageView: View {
             .alert("회원탈퇴", isPresented: $showWithdrawConfirm) {
                 Button("취소", role: .cancel) {}
                 Button("탈퇴", role: .destructive) {
-                    Task { try? await authManager.withdraw() }
+                    isWithdrawing = true
+                    Task {
+                        do {
+                            try await authManager.withdraw()
+                        } catch {
+                            withdrawError = "탈퇴 처리 중 오류: \(error.localizedDescription)"
+                            print("Withdraw error: \(error)")
+                        }
+                        isWithdrawing = false
+                    }
                 }
             } message: {
-                Text("정말 탈퇴하시겠습니까?\n모든 데이터가 삭제됩니다.")
+                Text("정말 탈퇴하시겠습니까?\n계정이 비활성화되며 재가입 시 새로운 계정으로 시작됩니다.")
             }
+            .alert("탈퇴 실패", isPresented: .init(
+                get: { withdrawError != nil },
+                set: { if !$0 { withdrawError = nil } }
+            )) {
+                Button("확인", role: .cancel) {}
+            } message: {
+                Text(withdrawError ?? "")
+            }
+            .overlay {
+                if isWithdrawing {
+                    Color.black.opacity(0.3).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView().tint(.white)
+                        Text("탈퇴 처리 중...")
+                            .font(.appCaption)
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+
+            // 앱 버전 표시
+            HStack {
+                Text("앱 버전")
+                    .font(.appBody)
+                    .foregroundColor(.theme.textSecondary)
+                Spacer()
+                Text(appVersionText)
+                    .font(.appCaption)
+                    .foregroundColor(.theme.textDisabled)
+            }
+            .padding(16)
+            .cardStyle()
         }
+    }
+
+    // MARK: - 앱 버전 (Bundle)
+    private var appVersionText: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
     }
 }
 
@@ -288,9 +338,13 @@ struct EditProfileView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authManager: AuthManager
     @State private var nickname = ""
+    @State private var originalNickname = ""
     @State private var bio = ""
     @State private var isLoading = false
     @State private var showSuccess = false
+    @State private var showImagePicker = false
+    @State private var selectedAvatar: UIImage?
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationView {
@@ -298,22 +352,56 @@ struct EditProfileView: View {
                 Color.theme.surface.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 20) {
-                        // 아바타
-                        AsyncImage(url: URL(string: authManager.currentUser?.avatarUrl ?? "")) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            default:
-                                Circle().fill(Color.theme.surface)
+                        // 아바타 (탭으로 변경)
+                        Button(action: { showImagePicker = true }) {
+                            ZStack(alignment: .bottomTrailing) {
+                                Group {
+                                    if let selectedAvatar = selectedAvatar {
+                                        Image(uiImage: selectedAvatar)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        AsyncImage(url: URL(string: authManager.currentUser?.avatarUrl ?? "")) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image.resizable().scaledToFill()
+                                            default:
+                                                Circle().fill(Color.theme.surfaceHigh)
+                                                    .overlay(
+                                                        Image(systemName: "person.fill")
+                                                            .font(.system(size: 36))
+                                                            .foregroundColor(.theme.textDisabled)
+                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(width: 96, height: 96)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle().stroke(Color.theme.secondary.opacity(0.4), lineWidth: 2)
+                                )
+
+                                // 카메라 뱃지
+                                Circle()
+                                    .fill(Color.theme.secondary)
+                                    .frame(width: 30, height: 30)
                                     .overlay(
-                                        Image(systemName: "person.fill")
-                                            .font(.system(size: 32))
-                                            .foregroundColor(.theme.textDisabled)
+                                        Image(systemName: "camera.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(.white)
                                     )
+                                    .overlay(Circle().stroke(Color.theme.surface, lineWidth: 2))
+                                    .offset(x: 2, y: 2)
                             }
                         }
-                        .frame(width: 80, height: 80)
-                        .clipShape(Circle())
+                        .buttonStyle(.plain)
+
+                        // 이미지 업로드 안내
+                        Text("탭하여 사진 선택 · 자동으로 1024px / 2MB 이하로 최적화")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textDisabled)
+                            .multilineTextAlignment(.center)
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("닉네임")
@@ -329,6 +417,13 @@ struct EditProfileView: View {
                                 .foregroundColor(.theme.textSecondary)
                             TextField("나를 소개하세요", text: $bio)
                                 .washHubTextField()
+                        }
+
+                        if let errorMessage = errorMessage {
+                            Text(errorMessage)
+                                .font(.appCaption)
+                                .foregroundColor(.theme.error)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
                         Button(action: saveProfile) {
@@ -359,27 +454,100 @@ struct EditProfileView: View {
             } message: {
                 Text("프로필이 업데이트되었습니다.")
             }
+            .sheet(isPresented: $showImagePicker) {
+                ImagePicker { image in
+                    selectedAvatar = image
+                }
+            }
             .onAppear {
                 nickname = authManager.currentUser?.nickname ?? ""
+                originalNickname = nickname
                 bio = authManager.currentUser?.bio ?? ""
             }
         }
     }
 
     private func saveProfile() {
+        let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 유효성: 닉네임 길이 2~20
+        guard trimmedNickname.count >= 2, trimmedNickname.count <= 20 else {
+            // TODO-minam: 공통 유효성 메시지 토스트로 전환
+            errorMessage = "닉네임은 2~20자로 입력해주세요."
+            return
+        }
+
         isLoading = true
+        errorMessage = nil
+
         Task {
             do {
+                // 1. 닉네임 중복 검사 (변경된 경우에만)
+                if trimmedNickname != originalNickname {
+                    let isDuplicate = try await authManager.checkNicknameDuplicate(trimmedNickname)
+                    if isDuplicate {
+                        errorMessage = "이미 사용 중인 닉네임입니다."
+                        isLoading = false
+                        return
+                    }
+                }
+
                 let session = try await supabase.auth.session
+                let userId = session.user.id.uuidString
+
+                // 2. 아바타 업로드 (선택된 경우)
+                // profiles 버킷 재사용 — 본인 폴더(`{userId}/`) 하위에만 업로드 허용 (RLS)
+                // iPhone 원본 사진은 쉽게 10-20MB 이므로 긴 변 1024px / 2MB 이하로 리사이즈
+                var avatarUrl: String?
+                if let image = selectedAvatar {
+                    guard let imageData = image.jpegDataUnder(maxDimension: 1024, maxBytes: 2 * 1024 * 1024) else {
+                        // TODO-minam: 인코딩 실패 시 사용자 알림
+                        errorMessage = "이미지 처리에 실패했습니다. 다른 사진으로 시도해주세요."
+                        isLoading = false
+                        return
+                    }
+                    // 서버 버킷 제한(5MB) 안전 검증 — 정책이 바뀌어도 클라이언트에서 한 번 더 차단
+                    let serverLimit = 5 * 1024 * 1024
+                    if imageData.count > serverLimit {
+                        errorMessage = "이미지 용량이 너무 큽니다. 더 작은 사진을 선택해주세요."
+                        isLoading = false
+                        return
+                    }
+
+                    let path = "\(userId)/\(UUID().uuidString).jpg"
+                    try await supabase.storage
+                        .from("profiles")
+                        .upload(
+                            path: path,
+                            file: imageData,
+                            options: .init(contentType: "image/jpeg", upsert: true)
+                        )
+                    avatarUrl = try supabase.storage
+                        .from("profiles")
+                        .getPublicURL(path: path)
+                        .absoluteString
+                }
+
+                // 3. 프로필 업데이트
+                var updateData: [String: String] = [
+                    "nickname": trimmedNickname,
+                    "bio": bio
+                ]
+                if let avatarUrl = avatarUrl {
+                    updateData["avatar_url"] = avatarUrl
+                }
+
                 try await supabase
                     .from("profiles")
-                    .update(["nickname": nickname, "bio": bio])
-                    .eq("id", value: session.user.id.uuidString)
+                    .update(updateData)
+                    .eq("id", value: userId)
                     .execute()
 
-                await authManager.loadProfile(userId: session.user.id.uuidString)
+                await authManager.loadProfile(userId: userId)
                 showSuccess = true
             } catch {
+                // TODO-minam: 에러 코드별 세분화된 메시지 처리
+                errorMessage = "프로필 저장에 실패했습니다. 잠시 후 다시 시도해주세요."
                 print("Profile update error: \(error)")
             }
             isLoading = false
