@@ -1,0 +1,173 @@
+import Foundation
+
+struct Routine: Identifiable, Codable {
+    let id: String
+    let userId: String
+    let title: String
+    let description: String?
+    let duration: Int?
+    let difficulty: Int?
+    let likeCount: Int
+    let forkCount: Int
+    let status: String
+    let createdAt: String
+    let updatedAt: String
+
+    /// JOIN 시 작성자 프로필
+    var profiles: Profile?
+    /// JOIN 시 단계 목록
+    var routineSteps: [RoutineStep]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case title, description, duration, difficulty
+        case likeCount = "like_count"
+        case forkCount = "fork_count"
+        case status
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case profiles
+        case routineSteps = "routine_steps"
+    }
+
+    /// 난이도 텍스트
+    var difficultyText: String {
+        switch difficulty {
+        case 1: return "입문"
+        case 2: return "쉬움"
+        case 3: return "보통"
+        case 4: return "어려움"
+        case 5: return "전문가"
+        default: return "미지정"
+        }
+    }
+
+    /// 소요시간 텍스트
+    var durationText: String {
+        guard let min = duration, min > 0 else { return "미지정" }
+        if min < 60 { return "\(min)분" }
+        let h = min / 60
+        let m = min % 60
+        return m > 0 ? "\(h)시간 \(m)분" : "\(h)시간"
+    }
+}
+
+struct RoutineStep: Identifiable, Codable {
+    let id: String
+    let routineId: String
+    let stepOrder: Int
+    let title: String
+    let description: String?
+    let duration: Int?
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case routineId = "routine_id"
+        case stepOrder = "step_order"
+        case title, description, duration
+        case createdAt = "created_at"
+    }
+
+    /// 소요시간 텍스트
+    var durationText: String {
+        guard let min = duration, min > 0 else { return "" }
+        return "\(min)분"
+    }
+}
+
+struct RoutineProduct: Identifiable, Codable {
+    let id: String
+    let routineId: String
+    let productName: String
+    let equipmentId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case routineId = "routine_id"
+        case productName = "product_name"
+        case equipmentId = "equipment_id"
+    }
+}
+
+struct RoutineExecution: Identifiable, Codable {
+    let id: String
+    let routineId: String
+    let userId: String
+    let status: String
+    let startedAt: String
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case routineId = "routine_id"
+        case userId = "user_id"
+        case status
+        case startedAt = "started_at"
+        case completedAt = "completed_at"
+    }
+}
+
+struct RoutineExecutionStep: Identifiable, Codable {
+    let id: String
+    let executionId: String
+    let stepId: String
+    var completed: Bool
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case executionId = "execution_id"
+        case stepId = "step_id"
+        case completed
+        case completedAt = "completed_at"
+    }
+}
+
+/// 세차지수 모델
+struct WashIndex {
+    let score: Int           // 0~100
+    let message: String
+    let recommendation: String
+    let details: WashIndexDetails
+
+    struct WashIndexDetails {
+        let rainProbability: Int   // %
+        let fineDust: Int          // μg/m³
+        let humidity: Int          // %
+        let temperature: Double    // °C
+    }
+
+    /// 점수 기반 등급
+    var grade: String {
+        switch score {
+        case 80...100: return "최고"
+        case 60..<80: return "좋음"
+        case 40..<60: return "보통"
+        case 20..<40: return "나쁨"
+        default: return "최악"
+        }
+    }
+
+    /// 점수 기반 색상 이름
+    var colorName: String {
+        switch score {
+        case 80...100: return "tertiary"   // 그린
+        case 60..<80: return "secondary"   // 블루
+        case 40..<60: return "kakaoYellow"
+        default: return "error"            // 레드
+        }
+    }
+
+    /// 점수 기반 아이콘
+    var iconName: String {
+        switch score {
+        case 80...100: return "sun.max.fill"
+        case 60..<80: return "cloud.sun.fill"
+        case 40..<60: return "cloud.fill"
+        case 20..<40: return "cloud.drizzle.fill"
+        default: return "cloud.heavyrain.fill"
+        }
+    }
+}

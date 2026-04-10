@@ -1,31 +1,22 @@
-### IntelliJ IDEA ###
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-
-### Gradle ###
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
-
-### Java ###
-*.class
-*.jar
-*.war
-*.log
-
-### Spring Boot ###
-application-local.yml
-
-### OS ###
+# macOS
 .DS_Store
 Thumbs.db
 
-### Environment ###
-.env
-*.env.local
+# Xcode / iOS
+**/build/
+**/DerivedData/
+**/*.xcuserstate
+**/xcuserdata/
+**/.swiftpm/
+**/Package.resolved
 
-### AWS ###
-credentials
+# 중첩 git repo (third-party / 백업)
+**/.git.backup_initial_commit/
+WashHub/supabase-swift/
+
+# Claude / 작업용 임시 파일
+palette-preview.html
+.serena/
+
+# Logs
+*.log

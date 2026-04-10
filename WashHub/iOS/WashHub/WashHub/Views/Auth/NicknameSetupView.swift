@@ -1,0 +1,136 @@
+import SwiftUI
+
+struct NicknameSetupView: View {
+    @EnvironmentObject var authManager: AuthManager
+    @State private var nickname = ""
+    @State private var isLoading = false
+    @State private var isDuplicate = false
+    @State private var isChecked = false
+    @State private var errorMessage: String?
+
+    private var isValid: Bool {
+        nickname.count >= 2 && nickname.count <= 10
+    }
+
+    private var canSubmit: Bool {
+        isValid && isChecked && !isDuplicate && !isLoading
+    }
+
+    var body: some View {
+        ZStack {
+            Color.theme.surface
+                .ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                // 헤더
+                VStack(spacing: 8) {
+                    Text("닉네임 설정")
+                        .font(.appHeadline1)
+                        .foregroundColor(.theme.textPrimary)
+
+                    Text("WashHub에서 사용할 닉네임을 설정해주세요")
+                        .font(.appCaption)
+                        .foregroundColor(.theme.textSecondary)
+                }
+                .padding(.top, 60)
+
+                // 닉네임 입력
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        TextField("닉네임 (2~10자)", text: $nickname)
+                            .font(.appBody)
+                            .foregroundColor(.theme.textPrimary)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .onChange(of: nickname, perform: { _ in
+                                isChecked = false
+                                isDuplicate = false
+                            })
+
+                        Button("중복확인") {
+                            checkDuplicate()
+                        }
+                        .font(.appLabel)
+                        .foregroundColor(isValid ? .theme.onPrimary : .theme.textDisabled)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(isValid ? Color.theme.primary : Color.theme.surfaceHigh)
+                        .cornerRadius(8)
+                        .disabled(!isValid || isLoading)
+                    }
+                    .padding(16)
+                    .background(Color.theme.surfaceHigh)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(statusBorderColor, lineWidth: 1)
+                    )
+
+                    // 상태 메시지
+                    if isChecked {
+                        Text(isDuplicate ? "이미 사용 중인 닉네임입니다" : "사용 가능한 닉네임입니다")
+                            .font(.appSmall)
+                            .foregroundColor(isDuplicate ? .theme.error : .theme.tertiary)
+                    } else if !nickname.isEmpty && !isValid {
+                        Text("닉네임은 2~10자로 입력해주세요")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.error)
+                    }
+
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .font(.appSmall)
+                            .foregroundColor(.theme.error)
+                    }
+                }
+                .padding(.horizontal, 24)
+
+                Spacer()
+
+                // 완료 버튼
+                Button(action: submit) {
+                    Text("완료")
+                        .primaryButtonStyle()
+                }
+                .disabled(!canSubmit)
+                .opacity(canSubmit ? 1.0 : 0.4)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
+    private var statusBorderColor: Color {
+        if isChecked && !isDuplicate {
+            return .theme.tertiary
+        } else if isChecked && isDuplicate {
+            return .theme.error
+        }
+        return .theme.border
+    }
+
+    private func checkDuplicate() {
+        isLoading = true
+        Task {
+            do {
+                isDuplicate = try await authManager.checkNicknameDuplicate(nickname)
+                isChecked = true
+            } catch {
+                errorMessage = "중복 검사에 실패했습니다"
+            }
+            isLoading = false
+        }
+    }
+
+    private func submit() {
+        isLoading = true
+        Task {
+            do {
+                try await authManager.updateNickname(nickname)
+            } catch {
+                errorMessage = "닉네임 설정에 실패했습니다"
+            }
+            isLoading = false
+        }
+    }
+}
