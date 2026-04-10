@@ -12,6 +12,8 @@ Thumbs.db
 
 # 중첩 git repo (third-party / 백업)
 **/.git.backup_initial_commit/
+
+# third-party SDK (SPM checkout)
 WashHub/supabase-swift/
 
 # Claude / 작업용 임시 파일
