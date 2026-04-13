@@ -4,15 +4,20 @@ import Supabase
 struct MyPageView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var feedService = FeedService()
+    @StateObject private var badgeService = BadgeService()
     @State private var myFeeds: [Feed] = []
     @State private var likedFeeds: [Feed] = []
     @State private var selectedTab = 0 // 0: 내 피드, 1: 좋아요
     @State private var showEditProfile = false
+    @State private var showBadgeCollection = false
     @State private var showLogoutConfirm = false
     @State private var showWithdrawConfirm = false
     @State private var isWithdrawing = false
     @State private var withdrawError: String?
     @State private var isLoading = true
+    @State private var showBadgeToast = false
+    @State private var toastBadgeName: String = ""
+    @State private var toastBadgeIcon: String = ""
 
     var body: some View {
         ZStack {
@@ -22,6 +27,9 @@ struct MyPageView: View {
                 VStack(spacing: 20) {
                     // 프로필 헤더
                     profileHeader
+
+                    // 뱃지 섹션
+                    badgeSection
 
                     // 탭 전환: 내 피드 / 좋아요
                     feedTabs
@@ -37,8 +45,20 @@ struct MyPageView: View {
             EditProfileView()
                 .environmentObject(authManager)
         }
+        .navigationDestination(isPresented: $showBadgeCollection) {
+            BadgeCollectionView()
+                .environmentObject(authManager)
+        }
+        .overlay(alignment: .top) {
+            if showBadgeToast {
+                badgeToastView
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(100)
+            }
+        }
         .task {
             await loadData()
+            await checkBadges()
         }
         .onReceive(NotificationCenter.default.publisher(for: .feedCreated)) { _ in
             Task { await loadData() }
@@ -49,8 +69,30 @@ struct MyPageView: View {
         if let userId = authManager.currentUser?.id {
             myFeeds = await feedService.loadMyFeeds(userId: userId)
             likedFeeds = await loadLikedFeeds(userId: userId)
+            await badgeService.loadAllBadges()
+            await badgeService.loadMyBadges(userId: userId)
         }
         isLoading = false
+    }
+
+    private func checkBadges() async {
+        await badgeService.checkAndUnlockBadges()
+        if let first = badgeService.newlyUnlocked.first {
+            toastBadgeName = first.badgeName
+            toastBadgeIcon = first.iconName
+            withAnimation(.spring()) {
+                showBadgeToast = true
+            }
+            // 뱃지 목록 리프레시
+            if let userId = authManager.currentUser?.id {
+                await badgeService.loadMyBadges(userId: userId)
+            }
+            // 3초 후 토스트 자동 닫기
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                withAnimation { showBadgeToast = false }
+                badgeService.consumeNewlyUnlocked()
+            }
+        }
     }
 
     private func loadLikedFeeds(userId: String) async -> [Feed] {
@@ -108,9 +150,27 @@ struct MyPageView: View {
                 .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(authManager.currentUser?.displayName ?? "사용자")
-                        .font(.appHeadline2)
-                        .foregroundColor(.theme.textPrimary)
+                    HStack(spacing: 6) {
+                        Text(authManager.currentUser?.displayName ?? "사용자")
+                            .font(.appHeadline2)
+                            .foregroundColor(.theme.textPrimary)
+
+                        // 대표 타이틀 뱃지
+                        if let titleBadge = titleBadge {
+                            HStack(spacing: 3) {
+                                Image(systemName: titleBadge.iconName)
+                                    .font(.system(size: 10))
+                                Text(titleBadge.name)
+                                    .font(.appSmall)
+                            }
+                            .foregroundColor(.theme.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(Color.theme.secondary.opacity(0.12))
+                            )
+                        }
+                    }
 
                     if let bio = authManager.currentUser?.bio, !bio.isEmpty {
                         Text(bio)
@@ -122,6 +182,7 @@ struct MyPageView: View {
                     HStack(spacing: 16) {
                         Label("차량 \(authManager.currentUser?.carCount ?? 0)", systemImage: "car")
                         Label("세차 \(authManager.currentUser?.washCount ?? 0)", systemImage: "drop.fill")
+                        Label("뱃지 \(badgeService.myBadges.count)", systemImage: "trophy")
                     }
                     .font(.appSmall)
                     .foregroundColor(.theme.textDisabled)
@@ -235,6 +296,116 @@ struct MyPageView: View {
                 }
             }
         }
+    }
+
+    // MARK: - 타이틀 뱃지 계산
+    private var titleBadge: Badge? {
+        guard let titleId = authManager.currentUser?.titleBadgeId else { return nil }
+        return badgeService.allBadges.first(where: { $0.id == titleId })
+    }
+
+    // MARK: - 뱃지 섹션
+    private var badgeSection: some View {
+        VStack(spacing: 12) {
+            // 헤더
+            HStack {
+                Text("내 뱃지")
+                    .font(.appBodyMedium)
+                    .foregroundColor(.theme.textPrimary)
+                Spacer()
+                Button(action: { showBadgeCollection = true }) {
+                    HStack(spacing: 4) {
+                        Text("전체보기")
+                            .font(.appCaption)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(.theme.textSecondary)
+                }
+            }
+
+            // 미니 뱃지 그리드 (획득한 것만, 최대 6개)
+            let unlockedBadges = badgeService.myBadges.compactMap { $0.badges }
+            if unlockedBadges.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "trophy")
+                        .foregroundColor(.theme.textDisabled)
+                    Text("아직 획득한 뱃지가 없습니다")
+                        .font(.appCaption)
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            } else {
+                let columns = [GridItem(.adaptive(minimum: 56), spacing: 12)]
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(Array(unlockedBadges.prefix(6)), id: \.id) { badge in
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: badgeGradient(badge),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: badge.iconName)
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            Text(badge.name)
+                                .font(.system(size: 9))
+                                .foregroundColor(.theme.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .cardStyle()
+    }
+
+    private func badgeGradient(_ badge: Badge) -> [Color] {
+        guard let type = BadgeType(rawValue: badge.badgeType) else {
+            return [.theme.secondary, .theme.secondaryDim]
+        }
+        let (start, end) = type.gradientColors
+        return [Color(hex: start), Color(hex: end)]
+    }
+
+    // MARK: - 뱃지 획득 토스트
+    private var badgeToastView: some View {
+        HStack(spacing: 10) {
+            Image(systemName: toastBadgeIcon)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.theme.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("뱃지 획득!")
+                    .font(.appCaptionMedium)
+                    .foregroundColor(.theme.textPrimary)
+                Text("「\(toastBadgeName)」 뱃지를 획득했습니다")
+                    .font(.appSmall)
+                    .foregroundColor(.theme.textSecondary)
+            }
+            Spacer()
+            Image(systemName: "xmark")
+                .font(.system(size: 12))
+                .foregroundColor(.theme.textDisabled)
+                .onTapGesture {
+                    withAnimation { showBadgeToast = false }
+                }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.theme.surfaceLowest)
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     // MARK: - 설정
