@@ -1,5 +1,7 @@
 import SwiftUI
 import Supabase
+import CoreLocation
+import MapKit
 
 // MARK: - 세차장 카테고리 / 편의시설 상수
 enum CarWashCategory {
@@ -44,6 +46,7 @@ struct CarWashListView: View {
     @State private var selectedCategory: String = CarWashCategory.all
     @State private var showAddCarWash = false
     @State private var showLoginAlert = false
+    @State private var showMapView = false
 
     var filteredCarWashes: [CarWash] {
         var result = carWashes
@@ -60,9 +63,13 @@ struct CarWashListView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color.theme.surface.ignoresSafeArea()
+
+                if showMapView {
+                    CarWashMapView()
+                } else {
 
                 VStack(spacing: 0) {
                     // 검색바
@@ -133,9 +140,17 @@ struct CarWashListView: View {
                         }
                     }
                 }
+
+                } // if-else showMapView 닫기
             }
             .navigationTitle("세차장")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { showMapView.toggle() }) {
+                        Image(systemName: showMapView ? "list.bullet" : "map")
+                            .foregroundColor(.theme.secondary)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         if authManager.isGuest { showLoginAlert = true }
@@ -157,6 +172,12 @@ struct CarWashListView: View {
             }
         }
         .task { await loadCarWashes() }
+        .onChange(of: showMapView) { _, isMap in
+            if !isMap {
+                // 지도 → 목록 전환 시 즐겨찾기된 세차장 즉시 반영
+                Task { await loadCarWashes() }
+            }
+        }
     }
 
     private func loadCarWashes() async {
@@ -227,11 +248,16 @@ struct CarWashCard: View {
 struct CarWashDetailView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) var dismiss
+    @StateObject private var reviewService = CarWashReviewService()
     @State var carWash: CarWash
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
     @State private var showCallFailedAlert = false
+    @State private var showReviewSheet = false
+    @State private var showLoginAlert = false
+    @State private var showDeleteReviewConfirm = false
+    @State private var reviewToDelete: CarWashReview?
     var onChanged: () async -> Void
 
     /// 전화 걸기 — 시뮬레이터/전화 불가 기기에서는 Alert 표시
@@ -269,23 +295,42 @@ struct CarWashDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // 이미지
-                    AsyncImage(url: URL(string: carWash.imageUrl ?? "")) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                        default:
-                            Rectangle().fill(Color.theme.surface)
-                                .overlay(
-                                    Image(systemName: "mappin.circle")
-                                        .font(.system(size: 50))
-                                        .foregroundColor(.theme.textDisabled)
-                                )
+                    // 미니 지도 또는 이미지
+                    if let lat = carWash.latitude, let lng = carWash.longitude {
+                        CarWashMiniMapView(
+                            name: carWash.name,
+                            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                        .clipped()
+                    } else if let imageUrl = carWash.imageUrl, !imageUrl.isEmpty {
+                        AsyncImage(url: URL(string: imageUrl)) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Rectangle().fill(Color.theme.surface)
+                                    .overlay(
+                                        Image(systemName: "mappin.circle")
+                                            .font(.system(size: 50))
+                                            .foregroundColor(.theme.textDisabled)
+                                    )
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                        .clipped()
+                    } else {
+                        Rectangle().fill(Color.theme.surface)
+                            .overlay(
+                                Image(systemName: "mappin.circle")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.theme.textDisabled)
+                            )
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 220)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    .clipped()
 
                     VStack(alignment: .leading, spacing: 12) {
                         // 이름 + 별점
@@ -355,6 +400,11 @@ struct CarWashDetailView: View {
                                 .font(.appCaption)
                                 .foregroundColor(.theme.textDisabled)
                         }
+
+                        Divider().background(Color.theme.border)
+
+                        // MARK: - 리뷰 섹션
+                        carWashReviewSection
                     }
                     .padding(16)
                 }
@@ -379,10 +429,25 @@ struct CarWashDetailView: View {
                 }
             }
         }
+        .task {
+            await reviewService.loadReviews(carWashId: carWash.id)
+            if !authManager.isGuest {
+                await reviewService.checkMyReview(carWashId: carWash.id)
+            }
+        }
         .sheet(isPresented: $showEdit) {
             EditCarWashView(carWash: carWash) { updated in
                 carWash = updated
                 Task { await onChanged() }
+            }
+        }
+        .sheet(isPresented: $showReviewSheet) {
+            WriteCarWashReviewSheet(
+                carWashId: carWash.id,
+                existingReview: reviewService.myExistingReview,
+                reviewService: reviewService
+            ) {
+                Task { await refreshCarWash() }
             }
         }
         .alert("삭제하시겠습니까?", isPresented: $showDeleteConfirm) {
@@ -393,10 +458,30 @@ struct CarWashDetailView: View {
         } message: {
             Text("삭제한 세차장은 복구할 수 없습니다.")
         }
+        .alert("리뷰를 삭제하시겠습니까?", isPresented: $showDeleteReviewConfirm) {
+            Button("취소", role: .cancel) { reviewToDelete = nil }
+            Button("삭제", role: .destructive) {
+                if let review = reviewToDelete {
+                    Task {
+                        try? await reviewService.deleteReview(reviewId: review.id, carWashId: carWash.id)
+                        await refreshCarWash()
+                        reviewToDelete = nil
+                    }
+                }
+            }
+        } message: {
+            Text("삭제한 리뷰는 복구할 수 없습니다.")
+        }
         .alert("전화를 걸 수 없습니다", isPresented: $showCallFailedAlert) {
             Button("확인", role: .cancel) {}
         } message: {
             Text("이 기기에서는 전화를 걸 수 없습니다. 실기기에서 다시 시도해주세요.")
+        }
+        .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
+            Button("로그인하기") { authManager.exitGuestMode() }
+            Button("계속 둘러보기", role: .cancel) {}
+        } message: {
+            Text("리뷰 작성은 로그인 후 이용할 수 있습니다.")
         }
         .overlay {
             if isDeleting {
@@ -421,6 +506,373 @@ struct CarWashDetailView: View {
             print("Car wash delete error: \(error)")
         }
         isDeleting = false
+    }
+
+    // MARK: - 리뷰 섹션
+    private var carWashReviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 헤더
+            HStack {
+                Text("리뷰")
+                    .font(.appHeadline3)
+                    .foregroundColor(.theme.textPrimary)
+
+                if !reviewService.reviews.isEmpty {
+                    Text("\(reviewService.reviews.count)")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.theme.secondary.opacity(0.15))
+                        .cornerRadius(8)
+                }
+
+                Spacer()
+
+                // 리뷰 작성 버튼
+                Button(action: {
+                    if authManager.isGuest {
+                        showLoginAlert = true
+                    } else {
+                        showReviewSheet = true
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: reviewService.myExistingReview != nil ? "pencil" : "plus")
+                        Text(reviewService.myExistingReview != nil ? "내 리뷰 수정" : "리뷰 작성")
+                    }
+                    .font(.appLabel)
+                    .foregroundColor(.theme.secondary)
+                }
+            }
+
+            // 리뷰 목록
+            if reviewService.isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView().tint(.theme.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 20)
+            } else if reviewService.reviews.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 28))
+                        .foregroundColor(.theme.textDisabled)
+                    Text("아직 리뷰가 없습니다")
+                        .font(.appCaption)
+                        .foregroundColor(.theme.textDisabled)
+                    Text("첫 번째 리뷰를 남겨보세요!")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                ForEach(reviewService.reviews) { review in
+                    CarWashReviewRow(
+                        review: review,
+                        isMyReview: review.userId == authManager.currentUser?.id,
+                        onEdit: { showReviewSheet = true },
+                        onDelete: {
+                            reviewToDelete = review
+                            showDeleteReviewConfirm = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - 세차장 데이터 갱신 (리뷰 후 별점/리뷰수 반영)
+    private func refreshCarWash() async {
+        do {
+            let persistCarWashes: [CarWash] = try await supabase
+                .from("car_washes")
+                .select()
+                .eq("id", value: carWash.id)
+                .limit(1)
+                .execute()
+                .value
+            if let updated = persistCarWashes.first {
+                carWash = updated
+            }
+        } catch {
+            print("Car wash refresh error: \(error)")
+        }
+        await onChanged()
+    }
+}
+
+// MARK: - 세차장 리뷰 행
+struct CarWashReviewRow: View {
+    let review: CarWashReview
+    let isMyReview: Bool
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                // 프로필
+                AsyncImage(url: URL(string: review.profiles?.avatarUrl ?? "")) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Circle().fill(Color.theme.surface)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.theme.textDisabled)
+                                    .font(.system(size: 12))
+                            )
+                    }
+                }
+                .frame(width: 28, height: 28)
+                .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(review.profiles?.nickname ?? "사용자")
+                        .font(.appLabel)
+                        .foregroundColor(.theme.textPrimary)
+
+                    Text(formatDate(review.createdAt))
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textDisabled)
+                }
+
+                Spacer()
+
+                // 별점
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { star in
+                        Image(systemName: star <= review.rating ? "star.fill" : "star")
+                            .font(.system(size: 12))
+                            .foregroundColor(star <= review.rating ? .theme.kakaoYellow : .theme.textDisabled)
+                    }
+                }
+
+                // 내 리뷰 메뉴
+                if isMyReview {
+                    Menu {
+                        Button(action: onEdit) {
+                            Label("수정", systemImage: "pencil")
+                        }
+                        Button(role: .destructive, action: onDelete) {
+                            Label("삭제", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14))
+                            .foregroundColor(.theme.textDisabled)
+                            .padding(4)
+                    }
+                }
+            }
+
+            // 리뷰 텍스트
+            if let text = review.reviewText, !text.isEmpty {
+                Text(text)
+                    .font(.appBody)
+                    .foregroundColor(.theme.textSecondary)
+                    .lineLimit(nil)
+            }
+        }
+        .padding(12)
+        .cardStyle()
+    }
+
+    private func formatDate(_ dateString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: dateString) else {
+            let fallback = ISO8601DateFormatter()
+            fallback.formatOptions = [.withInternetDateTime]
+            guard let d = fallback.date(from: dateString) else { return dateString }
+            return RelativeDateTimeFormatter().localizedString(for: d, relativeTo: Date())
+        }
+        let relative = RelativeDateTimeFormatter()
+        relative.locale = Locale(identifier: "ko_KR")
+        return relative.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - 세차장 리뷰 작성/수정 시트
+struct WriteCarWashReviewSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let carWashId: String
+    let existingReview: CarWashReview?
+    @ObservedObject var reviewService: CarWashReviewService
+
+    @State private var rating: Int
+    @State private var reviewText: String
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+
+    var onComplete: () -> Void
+
+    var isEditing: Bool { existingReview != nil }
+
+    init(carWashId: String, existingReview: CarWashReview?, reviewService: CarWashReviewService, onComplete: @escaping () -> Void) {
+        self.carWashId = carWashId
+        self.existingReview = existingReview
+        self.reviewService = reviewService
+        self.onComplete = onComplete
+        _rating = State(initialValue: existingReview?.rating ?? 0)
+        _reviewText = State(initialValue: existingReview?.reviewText ?? "")
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.theme.surface.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // 별점 선택
+                        VStack(spacing: 8) {
+                            Text("별점을 선택해주세요")
+                                .font(.appBodyMedium)
+                                .foregroundColor(.theme.textPrimary)
+
+                            HStack(spacing: 8) {
+                                ForEach(1...5, id: \.self) { star in
+                                    Button(action: { rating = star }) {
+                                        Image(systemName: star <= rating ? "star.fill" : "star")
+                                            .font(.system(size: 36))
+                                            .foregroundColor(star <= rating ? .theme.kakaoYellow : .theme.textDisabled)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+
+                            if rating > 0 {
+                                Text(ratingLabel(rating))
+                                    .font(.appCaption)
+                                    .foregroundColor(.theme.secondary)
+                            }
+                        }
+
+                        // 리뷰 텍스트
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("리뷰 (선택)")
+                                    .font(.appLabel)
+                                    .foregroundColor(.theme.textSecondary)
+                                Spacer()
+                                Text("\(reviewText.count)/500")
+                                    .font(.appSmall)
+                                    .foregroundColor(reviewText.count > 500 ? .theme.error : .theme.textDisabled)
+                            }
+
+                            TextEditor(text: $reviewText)
+                                .font(.appBody)
+                                .foregroundColor(.theme.textPrimary)
+                                .frame(minHeight: 120)
+                                .padding(12)
+                                .background(Color.theme.surface)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.theme.border, lineWidth: 1)
+                                )
+                                .onAppear { UITextView.appearance().backgroundColor = .clear }
+                        }
+
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.appCaption)
+                                .foregroundColor(.theme.error)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        // 제출 버튼
+                        Button(action: submitReview) {
+                            if isSubmitting {
+                                ProgressView().tint(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                            } else {
+                                Text(isEditing ? "수정하기" : "등록하기")
+                                    .primaryButtonStyle()
+                            }
+                        }
+                        .disabled(rating == 0 || reviewText.count > 500 || isSubmitting)
+                        .opacity(rating == 0 ? 0.4 : 1.0)
+                    }
+                    .padding(16)
+                }
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+            }
+            .navigationTitle(isEditing ? "리뷰 수정" : "리뷰 작성")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("취소") { dismiss() }
+                        .foregroundColor(.theme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func ratingLabel(_ value: Int) -> String {
+        switch value {
+        case 1: return "별로예요"
+        case 2: return "그저 그래요"
+        case 3: return "보통이에요"
+        case 4: return "좋아요"
+        case 5: return "최고예요!"
+        default: return ""
+        }
+    }
+
+    private func submitReview() {
+        guard rating >= 1 && rating <= 5 else {
+            errorMessage = "별점을 선택해주세요."
+            return
+        }
+        guard reviewText.count <= 500 else {
+            errorMessage = "리뷰는 500자 이내로 작성해주세요."
+            return
+        }
+
+        isSubmitting = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let text = reviewText.isEmpty ? nil : reviewText
+
+                if let existing = existingReview {
+                    try await reviewService.updateReview(
+                        reviewId: existing.id,
+                        carWashId: carWashId,
+                        rating: rating,
+                        reviewText: text
+                    )
+                } else {
+                    try await reviewService.addReview(
+                        carWashId: carWashId,
+                        rating: rating,
+                        reviewText: text
+                    )
+                }
+
+                onComplete()
+                dismiss()
+            } catch {
+                // TODO-minam: 중복 리뷰 에러 분기 처리 (unique constraint)
+                if "\(error)".contains("duplicate") || "\(error)".contains("unique") {
+                    errorMessage = "이미 리뷰를 작성하셨습니다."
+                } else {
+                    errorMessage = "저장에 실패했습니다. 잠시 후 다시 시도해주세요."
+                }
+                print("Car wash review submit error: \(error)")
+            }
+            isSubmitting = false
+        }
     }
 }
 
@@ -612,7 +1064,7 @@ struct EditCarWashView: View {
                     body: description.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
 
-                let data: [String: String] = [
+                var data: [String: String] = [
                     "name": trimmedName,
                     "address": trimmedAddress,
                     "phone": phone,
@@ -620,6 +1072,14 @@ struct EditCarWashView: View {
                     "wash_type": category,
                     "description": encodedDesc
                 ]
+
+                // 주소가 변경된 경우 좌표 재변환
+                if trimmedAddress != carWash.address {
+                    if let coordinate = await geocodeAddress(trimmedAddress) {
+                        data["latitude"] = String(coordinate.latitude)
+                        data["longitude"] = String(coordinate.longitude)
+                    }
+                }
 
                 let persistUpdated: [CarWash] = try await supabase
                     .from("car_washes")
@@ -801,6 +1261,12 @@ struct AddCarWashView: View {
                 if !hours.isEmpty { data["hours"] = hours }
                 if !encodedDesc.isEmpty { data["description"] = encodedDesc }
 
+                // 주소 → 좌표 변환 (지오코딩)
+                if let coordinate = await geocodeAddress(trimmedAddress) {
+                    data["latitude"] = String(coordinate.latitude)
+                    data["longitude"] = String(coordinate.longitude)
+                }
+
                 try await supabase.from("car_washes").insert(data).execute()
                 await onComplete()
                 dismiss()
@@ -811,4 +1277,97 @@ struct AddCarWashView: View {
             isLoading = false
         }
     }
+}
+
+// MARK: - 주소 → 좌표 변환 (CLGeocoder)
+/// 주소 문자열을 위·경도 좌표로 변환한다.
+/// Apple CLGeocoder를 사용하며, 실패 시 nil을 반환한다.
+private func geocodeAddress(_ address: String) async -> CLLocationCoordinate2D? {
+    let geocoder = CLGeocoder()
+    do {
+        let placemarks = try await geocoder.geocodeAddressString(address)
+        if let location = placemarks.first?.location {
+            return location.coordinate
+        }
+    } catch {
+        // TODO-minam: 지오코딩 실패 로깅 / 사용자 안내 개선
+        print("Geocoding failed for '\(address)': \(error)")
+    }
+    return nil
+}
+
+// MARK: - 세차장 미니 지도 (상세 화면 상단)
+struct CarWashMiniMapView: View {
+    let name: String
+    let coordinate: CLLocationCoordinate2D
+
+    @State private var region: MKCoordinateRegion
+
+    init(name: String, coordinate: CLLocationCoordinate2D) {
+        self.name = name
+        self.coordinate = coordinate
+        _region = State(initialValue: MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+        ))
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Map(coordinateRegion: $region, annotationItems: [
+                MapPin(id: "pin", coordinate: coordinate)
+            ]) { pin in
+                MapAnnotation(coordinate: pin.coordinate) {
+                    VStack(spacing: 2) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.theme.secondary)
+                                .frame(width: 32, height: 32)
+                                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                            Image(systemName: "drop.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                        }
+                        Text(name)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.theme.textPrimary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(4)
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+
+            // 길찾기 버튼
+            Button(action: {
+                let destination = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+                destination.name = name
+                destination.openInMaps(launchOptions: [
+                    MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+                ])
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.turn.up.right.diamond")
+                        .font(.system(size: 12))
+                    Text("길찾기")
+                        .font(.appLabel)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.theme.secondary)
+                .cornerRadius(16)
+                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+            }
+            .padding(12)
+        }
+    }
+}
+
+/// 미니 지도 어노테이션용 아이템
+private struct MapPin: Identifiable {
+    let id: String
+    let coordinate: CLLocationCoordinate2D
 }

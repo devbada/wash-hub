@@ -3,19 +3,19 @@ import Combine
 import Supabase
 
 @MainActor
-final class EquipmentReviewService: ObservableObject {
-    @Published var reviews: [EquipmentReview] = []
+final class CarWashReviewService: ObservableObject {
+    @Published var reviews: [CarWashReview] = []
     @Published var isLoading = false
-    @Published var myExistingReview: EquipmentReview?
+    @Published var myExistingReview: CarWashReview?
 
     // MARK: - 리뷰 목록 조회
-    func loadReviews(equipmentId: String) async {
+    func loadReviews(carWashId: String) async {
         isLoading = true
         do {
-            let persistReviews: [EquipmentReview] = try await supabase
-                .from("equipment_reviews")
+            let persistReviews: [CarWashReview] = try await supabase
+                .from("car_wash_reviews")
                 .select("*, profiles!user_id(id, nickname, avatar_url)")
-                .eq("equipment_id", value: equipmentId)
+                .eq("car_wash_id", value: carWashId)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: false)
                 .execute()
@@ -23,19 +23,19 @@ final class EquipmentReviewService: ObservableObject {
 
             reviews = persistReviews
         } catch {
-            print("Equipment reviews load error: \(error)")
+            print("Car wash reviews load error: \(error)")
         }
         isLoading = false
     }
 
     // MARK: - 내 리뷰 존재 여부 확인
-    func checkMyReview(equipmentId: String) async {
+    func checkMyReview(carWashId: String) async {
         do {
             let session = try await supabase.auth.session
-            let persistMyReviews: [EquipmentReview] = try await supabase
-                .from("equipment_reviews")
+            let persistMyReviews: [CarWashReview] = try await supabase
+                .from("car_wash_reviews")
                 .select("*, profiles!user_id(id, nickname, avatar_url)")
-                .eq("equipment_id", value: equipmentId)
+                .eq("car_wash_id", value: carWashId)
                 .eq("user_id", value: session.user.id.uuidString)
                 .eq("status", value: "ACTIVE")
                 .limit(1)
@@ -49,11 +49,11 @@ final class EquipmentReviewService: ObservableObject {
     }
 
     // MARK: - 리뷰 작성
-    func addReview(equipmentId: String, rating: Int, reviewText: String?) async throws {
+    func addReview(carWashId: String, rating: Int, reviewText: String?) async throws {
         let session = try await supabase.auth.session
 
         var insertData: [String: String] = [
-            "equipment_id": equipmentId,
+            "car_wash_id": carWashId,
             "user_id": session.user.id.uuidString,
             "rating": "\(rating)",
             "status": "ACTIVE"
@@ -64,16 +64,16 @@ final class EquipmentReviewService: ObservableObject {
         }
 
         try await supabase
-            .from("equipment_reviews")
+            .from("car_wash_reviews")
             .insert(insertData)
             .execute()
 
-        await loadReviews(equipmentId: equipmentId)
-        await checkMyReview(equipmentId: equipmentId)
+        await loadReviews(carWashId: carWashId)
+        await checkMyReview(carWashId: carWashId)
     }
 
     // MARK: - 리뷰 수정
-    func updateReview(reviewId: String, equipmentId: String, rating: Int, reviewText: String?) async throws {
+    func updateReview(reviewId: String, carWashId: String, rating: Int, reviewText: String?) async throws {
         struct ReviewUpdate: Encodable {
             let rating: Int
             let review_text: String?
@@ -82,24 +82,24 @@ final class EquipmentReviewService: ObservableObject {
         let trimmedText = reviewText?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         try await supabase
-            .from("equipment_reviews")
+            .from("car_wash_reviews")
             .update(ReviewUpdate(rating: rating, review_text: trimmedText))
             .eq("id", value: reviewId)
             .execute()
 
-        await loadReviews(equipmentId: equipmentId)
-        await checkMyReview(equipmentId: equipmentId)
+        await loadReviews(carWashId: carWashId)
+        await checkMyReview(carWashId: carWashId)
     }
 
     // MARK: - 리뷰 삭제 (소프트 삭제)
-    func deleteReview(reviewId: String, equipmentId: String) async throws {
+    func deleteReview(reviewId: String, carWashId: String) async throws {
         try await supabase
-            .from("equipment_reviews")
+            .from("car_wash_reviews")
             .update(["status": "DELETED"])
             .eq("id", value: reviewId)
             .execute()
 
-        await loadReviews(equipmentId: equipmentId)
+        await loadReviews(carWashId: carWashId)
         myExistingReview = nil
     }
 }

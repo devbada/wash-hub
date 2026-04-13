@@ -43,10 +43,10 @@ struct NicknameSetupView: View {
                             .foregroundColor(.theme.textPrimary)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
-                            .onChange(of: nickname, perform: { _ in
+                            .onChange(of: nickname) {
                                 isChecked = false
                                 isDuplicate = false
-                            })
+                            }
 
                         Button("중복확인") {
                             checkDuplicate()

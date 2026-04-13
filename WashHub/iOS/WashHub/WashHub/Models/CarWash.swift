@@ -30,3 +30,28 @@ struct CarWash: Identifiable, Codable {
         case updatedAt = "updated_at"
     }
 }
+
+struct CarWashReview: Identifiable, Codable {
+    let id: String
+    let carWashId: String
+    let userId: String
+    let rating: Int
+    let reviewText: String?
+    let status: String
+    let createdAt: String
+    let updatedAt: String?
+
+    var profiles: Profile?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case carWashId = "car_wash_id"
+        case userId = "user_id"
+        case rating
+        case reviewText = "review_text"
+        case status
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case profiles
+    }
+}

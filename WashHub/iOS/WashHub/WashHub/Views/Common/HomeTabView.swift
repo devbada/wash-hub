@@ -72,7 +72,7 @@ struct HomeTabView: View {
                     .tag(4)
             }
             .tint(.theme.secondary)
-            .onChange(of: selectedTab, perform: { newTab in
+            .onChange(of: selectedTab) { _, newTab in
                 if newTab == 1 {
                     // 플레이스홀더 탭은 선택되지 않도록 되돌림 — FAB이 실제 액션 담당
                     selectedTab = 0
@@ -80,7 +80,7 @@ struct HomeTabView: View {
                     selectedTab = 0
                     showLoginAlert = true
                 }
-            })
+            }
 
             // 가운데 떠 있는 작성 FAB — Hero 액션
             createFloatingButton

@@ -60,6 +60,17 @@ struct WashForecastView: View {
     // MARK: - Header
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // 지역명 표시
+            if !washIndexService.regionName.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "location.fill")
+                        .font(.system(size: 10))
+                    Text(washIndexService.regionName)
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(.theme.textSecondary)
+            }
+
             if let best = washIndexService.forecast.max(by: { $0.score < $1.score }) {
                 HStack(spacing: 4) {
                     Image(systemName: "sparkles")

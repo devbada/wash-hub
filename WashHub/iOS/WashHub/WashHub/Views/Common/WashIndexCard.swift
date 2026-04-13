@@ -66,11 +66,26 @@ struct WashIndexCard: View {
             HStack(alignment: .center, spacing: 16) {
                 // 좌측: 텍스트 영역
                 VStack(alignment: .leading, spacing: 12) {
-                    // WASH INDEX 라벨
-                    Text("WASH INDEX")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(2)
-                        .foregroundColor(.theme.textSecondary)
+                    // WASH INDEX 라벨 + 지역명
+                    HStack(spacing: 6) {
+                        Text("WASH INDEX")
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(2)
+                            .foregroundColor(.theme.textSecondary)
+
+                        if !washIndexService.regionName.isEmpty {
+                            Text("·")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.theme.textDisabled)
+                            HStack(spacing: 2) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 8))
+                                Text(washIndexService.regionName)
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundColor(.theme.textSecondary)
+                        }
+                    }
 
                     // 큰 메시지
                     Text(index.message)
