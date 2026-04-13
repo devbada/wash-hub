@@ -104,15 +104,21 @@ struct CarWashMapView: View {
             if let toast = toastMessage {
                 VStack {
                     Spacer()
-                    Text(toast)
-                        .font(.appLabel)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(Color.theme.surfaceLow.cornerRadius(20))
-                        .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-                        .padding(.bottom, 100)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    HStack(spacing: 8) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.theme.tertiary)
+                        Text(toast)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background(Color.black.opacity(0.85))
+                    .cornerRadius(24)
+                    .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
 
