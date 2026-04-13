@@ -216,10 +216,15 @@ struct EquipmentCard: View {
 struct EquipmentDetailView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) var dismiss
+    @StateObject private var reviewService = EquipmentReviewService()
     @State var equipment: Equipment
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
+    @State private var showReviewSheet = false
+    @State private var showLoginAlert = false
+    @State private var showDeleteReviewConfirm = false
+    @State private var reviewToDelete: EquipmentReview?
     var onChanged: () async -> Void
 
     /// 본인 소유 여부
@@ -308,6 +313,11 @@ struct EquipmentDetailView: View {
                                 .font(.appCaption)
                                 .foregroundColor(.theme.textDisabled)
                         }
+
+                        Divider().background(Color.theme.border)
+
+                        // MARK: - 리뷰 섹션
+                        reviewSection
                     }
                     .padding(16)
                 }
@@ -332,10 +342,26 @@ struct EquipmentDetailView: View {
                 }
             }
         }
+        .task {
+            await reviewService.loadReviews(equipmentId: equipment.id)
+            if !authManager.isGuest {
+                await reviewService.checkMyReview(equipmentId: equipment.id)
+            }
+        }
         .sheet(isPresented: $showEdit) {
             EditEquipmentView(equipment: equipment) { updated in
                 equipment = updated
                 Task { await onChanged() }
+            }
+        }
+        .sheet(isPresented: $showReviewSheet) {
+            WriteReviewSheet(
+                equipmentId: equipment.id,
+                existingReview: reviewService.myExistingReview,
+                reviewService: reviewService
+            ) {
+                // 리뷰 작성/수정 후 장비 정보 새로고침 (rating, review_count 반영)
+                Task { await refreshEquipment() }
             }
         }
         .alert("삭제하시겠습니까?", isPresented: $showDeleteConfirm) {
@@ -346,12 +372,126 @@ struct EquipmentDetailView: View {
         } message: {
             Text("삭제한 장비는 복구할 수 없습니다.")
         }
+        .alert("리뷰를 삭제하시겠습니까?", isPresented: $showDeleteReviewConfirm) {
+            Button("취소", role: .cancel) { reviewToDelete = nil }
+            Button("삭제", role: .destructive) {
+                if let review = reviewToDelete {
+                    Task {
+                        try? await reviewService.deleteReview(reviewId: review.id, equipmentId: equipment.id)
+                        await refreshEquipment()
+                        reviewToDelete = nil
+                    }
+                }
+            }
+        } message: {
+            Text("삭제한 리뷰는 복구할 수 없습니다.")
+        }
+        .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
+            Button("로그인하기") { authManager.exitGuestMode() }
+            Button("계속 둘러보기", role: .cancel) {}
+        } message: {
+            Text("리뷰 작성은 로그인 후 이용할 수 있습니다.")
+        }
         .overlay {
             if isDeleting {
                 Color.black.opacity(0.3).ignoresSafeArea()
                 ProgressView().tint(.white)
             }
         }
+    }
+
+    // MARK: - 리뷰 섹션
+    private var reviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 헤더
+            HStack {
+                Text("리뷰")
+                    .font(.appHeadline3)
+                    .foregroundColor(.theme.textPrimary)
+
+                if !reviewService.reviews.isEmpty {
+                    Text("\(reviewService.reviews.count)")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.theme.secondary.opacity(0.15))
+                        .cornerRadius(8)
+                }
+
+                Spacer()
+
+                // 리뷰 작성 버튼
+                Button(action: {
+                    if authManager.isGuest {
+                        showLoginAlert = true
+                    } else {
+                        showReviewSheet = true
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: reviewService.myExistingReview != nil ? "pencil" : "plus")
+                        Text(reviewService.myExistingReview != nil ? "내 리뷰 수정" : "리뷰 작성")
+                    }
+                    .font(.appLabel)
+                    .foregroundColor(.theme.secondary)
+                }
+            }
+
+            // 리뷰 목록
+            if reviewService.isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView().tint(.theme.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 20)
+            } else if reviewService.reviews.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 28))
+                        .foregroundColor(.theme.textDisabled)
+                    Text("아직 리뷰가 없습니다")
+                        .font(.appCaption)
+                        .foregroundColor(.theme.textDisabled)
+                    Text("첫 번째 리뷰를 남겨보세요!")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                ForEach(reviewService.reviews) { review in
+                    ReviewRow(
+                        review: review,
+                        isMyReview: review.userId == authManager.currentUser?.id,
+                        onEdit: { showReviewSheet = true },
+                        onDelete: {
+                            reviewToDelete = review
+                            showDeleteReviewConfirm = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private func refreshEquipment() async {
+        do {
+            let persistEquipments: [Equipment] = try await supabase
+                .from("equipments")
+                .select()
+                .eq("id", value: equipment.id)
+                .limit(1)
+                .execute()
+                .value
+            if let updated = persistEquipments.first {
+                equipment = updated
+            }
+        } catch {
+            print("Equipment refresh error: \(error)")
+        }
+        await onChanged()
     }
 
     private func deleteEquipment() async {
@@ -370,6 +510,278 @@ struct EquipmentDetailView: View {
             print("Equipment delete error: \(error)")
         }
         isDeleting = false
+    }
+}
+
+// MARK: - 리뷰 행
+struct ReviewRow: View {
+    let review: EquipmentReview
+    let isMyReview: Bool
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                // 프로필
+                AsyncImage(url: URL(string: review.profiles?.avatarUrl ?? "")) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Circle().fill(Color.theme.surface)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.theme.textDisabled)
+                                    .font(.system(size: 12))
+                            )
+                    }
+                }
+                .frame(width: 28, height: 28)
+                .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(review.profiles?.nickname ?? "사용자")
+                        .font(.appLabel)
+                        .foregroundColor(.theme.textPrimary)
+
+                    Text(formatDate(review.createdAt))
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textDisabled)
+                }
+
+                Spacer()
+
+                // 별점
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { star in
+                        Image(systemName: star <= review.rating ? "star.fill" : "star")
+                            .font(.system(size: 12))
+                            .foregroundColor(star <= review.rating ? .theme.kakaoYellow : .theme.textDisabled)
+                    }
+                }
+
+                // 내 리뷰 메뉴
+                if isMyReview {
+                    Menu {
+                        Button(action: onEdit) {
+                            Label("수정", systemImage: "pencil")
+                        }
+                        Button(role: .destructive, action: onDelete) {
+                            Label("삭제", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14))
+                            .foregroundColor(.theme.textDisabled)
+                            .padding(4)
+                    }
+                }
+            }
+
+            // 리뷰 텍스트
+            if let text = review.reviewText, !text.isEmpty {
+                Text(text)
+                    .font(.appBody)
+                    .foregroundColor(.theme.textSecondary)
+                    .lineLimit(nil)
+            }
+        }
+        .padding(12)
+        .cardStyle()
+    }
+
+    private func formatDate(_ dateString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: dateString) else {
+            let fallback = ISO8601DateFormatter()
+            fallback.formatOptions = [.withInternetDateTime]
+            guard let d = fallback.date(from: dateString) else { return dateString }
+            return RelativeDateTimeFormatter().localizedString(for: d, relativeTo: Date())
+        }
+        let relative = RelativeDateTimeFormatter()
+        relative.locale = Locale(identifier: "ko_KR")
+        return relative.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - 리뷰 작성/수정 시트
+struct WriteReviewSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let equipmentId: String
+    let existingReview: EquipmentReview?
+    @ObservedObject var reviewService: EquipmentReviewService
+
+    @State private var rating: Int
+    @State private var reviewText: String
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+
+    var onComplete: () -> Void
+
+    var isEditing: Bool { existingReview != nil }
+
+    init(equipmentId: String, existingReview: EquipmentReview?, reviewService: EquipmentReviewService, onComplete: @escaping () -> Void) {
+        self.equipmentId = equipmentId
+        self.existingReview = existingReview
+        self.reviewService = reviewService
+        self.onComplete = onComplete
+        _rating = State(initialValue: existingReview?.rating ?? 0)
+        _reviewText = State(initialValue: existingReview?.reviewText ?? "")
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.theme.surface.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // 별점 선택
+                        VStack(spacing: 8) {
+                            Text("별점을 선택해주세요")
+                                .font(.appBodyMedium)
+                                .foregroundColor(.theme.textPrimary)
+
+                            HStack(spacing: 8) {
+                                ForEach(1...5, id: \.self) { star in
+                                    Button(action: { rating = star }) {
+                                        Image(systemName: star <= rating ? "star.fill" : "star")
+                                            .font(.system(size: 36))
+                                            .foregroundColor(star <= rating ? .theme.kakaoYellow : .theme.textDisabled)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+
+                            if rating > 0 {
+                                Text(ratingLabel(rating))
+                                    .font(.appCaption)
+                                    .foregroundColor(.theme.secondary)
+                            }
+                        }
+
+                        // 리뷰 텍스트
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("리뷰 (선택)")
+                                    .font(.appLabel)
+                                    .foregroundColor(.theme.textSecondary)
+                                Spacer()
+                                Text("\(reviewText.count)/500")
+                                    .font(.appSmall)
+                                    .foregroundColor(reviewText.count > 500 ? .theme.error : .theme.textDisabled)
+                            }
+
+                            TextEditor(text: $reviewText)
+                                .font(.appBody)
+                                .foregroundColor(.theme.textPrimary)
+                                .frame(minHeight: 120)
+                                .padding(12)
+                                .background(Color.theme.surface)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.theme.border, lineWidth: 1)
+                                )
+                                .onAppear { UITextView.appearance().backgroundColor = .clear }
+                        }
+
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.appCaption)
+                                .foregroundColor(.theme.error)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        // 제출 버튼
+                        Button(action: submitReview) {
+                            if isSubmitting {
+                                ProgressView().tint(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                            } else {
+                                Text(isEditing ? "수정하기" : "등록하기")
+                                    .primaryButtonStyle()
+                            }
+                        }
+                        .disabled(rating == 0 || reviewText.count > 500 || isSubmitting)
+                        .opacity(rating == 0 ? 0.4 : 1.0)
+                    }
+                    .padding(16)
+                }
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+            }
+            .navigationTitle(isEditing ? "리뷰 수정" : "리뷰 작성")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("취소") { dismiss() }
+                        .foregroundColor(.theme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func ratingLabel(_ value: Int) -> String {
+        switch value {
+        case 1: return "별로예요"
+        case 2: return "그저 그래요"
+        case 3: return "보통이에요"
+        case 4: return "좋아요"
+        case 5: return "최고예요!"
+        default: return ""
+        }
+    }
+
+    private func submitReview() {
+        guard rating >= 1 && rating <= 5 else {
+            errorMessage = "별점을 선택해주세요."
+            return
+        }
+        guard reviewText.count <= 500 else {
+            errorMessage = "리뷰는 500자 이내로 작성해주세요."
+            return
+        }
+
+        isSubmitting = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let text = reviewText.isEmpty ? nil : reviewText
+
+                if let existing = existingReview {
+                    try await reviewService.updateReview(
+                        reviewId: existing.id,
+                        equipmentId: equipmentId,
+                        rating: rating,
+                        reviewText: text
+                    )
+                } else {
+                    try await reviewService.addReview(
+                        equipmentId: equipmentId,
+                        rating: rating,
+                        reviewText: text
+                    )
+                }
+
+                onComplete()
+                dismiss()
+            } catch {
+                // TODO-minam: 중복 리뷰 에러 분기 처리 (unique constraint)
+                if "\(error)".contains("duplicate") || "\(error)".contains("unique") {
+                    errorMessage = "이미 리뷰를 작성하셨습니다."
+                } else {
+                    errorMessage = "저장에 실패했습니다. 잠시 후 다시 시도해주세요."
+                }
+                print("Review submit error: \(error)")
+            }
+            isSubmitting = false
+        }
     }
 }
 

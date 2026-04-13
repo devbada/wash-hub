@@ -35,6 +35,7 @@ struct EquipmentReview: Identifiable, Codable {
     let reviewText: String?
     let status: String
     let createdAt: String
+    let updatedAt: String?
 
     var profiles: Profile?
 
@@ -46,6 +47,7 @@ struct EquipmentReview: Identifiable, Codable {
         case reviewText = "review_text"
         case status
         case createdAt = "created_at"
+        case updatedAt = "updated_at"
         case profiles
     }
 }
