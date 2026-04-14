@@ -5,6 +5,7 @@ struct MyCarListView: View {
     @State private var myCars: [MyCar] = []
     @State private var isLoading = true
     @State private var showAddCar = false
+    @State private var showStats = false
 
     var body: some View {
         NavigationView {
@@ -22,6 +23,12 @@ struct MyCarListView: View {
             }
             .navigationTitle("내차")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    NavigationLink(destination: WashStatsView()) {
+                        Image(systemName: "chart.bar.fill")
+                            .foregroundColor(.theme.secondary)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showAddCar = true }) {
                         Image(systemName: "plus")

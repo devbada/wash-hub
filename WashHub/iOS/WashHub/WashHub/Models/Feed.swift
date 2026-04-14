@@ -16,6 +16,10 @@ struct Feed: Identifiable, Codable {
     let updatedAt: String
     let isEdited: Bool
 
+    // PPL / 협찬
+    let isSponsored: Bool
+    let sponsorName: String?
+
     /// JOIN 시 작성자 프로필
     var profiles: Profile?
     /// JOIN 시 차량 정보
@@ -34,6 +38,8 @@ struct Feed: Identifiable, Codable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case isEdited = "is_edited"
+        case isSponsored = "is_sponsored"
+        case sponsorName = "sponsor_name"
         case profiles
         case myCars = "my_cars"
     }

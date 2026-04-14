@@ -79,7 +79,9 @@ final class FeedService: ObservableObject {
         carId: String?,
         beforeImages: [Data],
         afterImages: [Data],
-        extraImages: [Data] = []
+        extraImages: [Data] = [],
+        isSponsored: Bool = false,
+        sponsorName: String? = nil
     ) async throws -> String {
         let session = try await supabase.auth.session
         let feedId = UUID().uuidString
@@ -92,10 +94,14 @@ final class FeedService: ObservableObject {
             "content": content ?? "",
             "location": location ?? "",
             "wash_method": washMethod ?? "",
-            "status": "ACTIVE"
+            "status": "ACTIVE",
+            "is_sponsored": isSponsored ? "true" : "false"
         ]
         if let carId = carId {
             feedData["car_id"] = carId
+        }
+        if let sponsorName = sponsorName {
+            feedData["sponsor_name"] = sponsorName
         }
 
         try await supabase

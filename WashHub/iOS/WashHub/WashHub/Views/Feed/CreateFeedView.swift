@@ -16,6 +16,10 @@ struct CreateFeedView: View {
     @State private var showSuccess = false
     @State private var errorMessage: String?
 
+    // 협찬/PPL
+    @State private var isSponsored = false
+    @State private var sponsorName = ""
+
     // 내차 선택
     @State private var myCars: [MyCar] = []
     @State private var selectedCarId: String?
@@ -183,6 +187,26 @@ struct CreateFeedView: View {
                             maxCount: 10,
                             onAdd: { hideKeyboard(); activePickerType = .extra }
                         )
+
+                        // 협찬/PPL 설정
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle(isOn: $isSponsored) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "megaphone.fill")
+                                        .foregroundColor(Color(red: 255/255, green: 176/255, blue: 59/255))
+                                        .font(.system(size: 14))
+                                    Text("협찬/광고 피드")
+                                        .font(.appBody)
+                                        .foregroundColor(.theme.textPrimary)
+                                }
+                            }
+                            .tint(.theme.secondary)
+
+                            if isSponsored {
+                                TextField("협찬 브랜드명 (예: 소낙스코리아)", text: $sponsorName)
+                                    .washHubTextField()
+                            }
+                        }
 
                         if let errorMessage = errorMessage {
                             Text(errorMessage)
@@ -445,7 +469,9 @@ struct CreateFeedView: View {
                     carId: selectedCarId,
                     beforeImages: beforeData,
                     afterImages: afterData,
-                    extraImages: extraData
+                    extraImages: extraData,
+                    isSponsored: isSponsored,
+                    sponsorName: isSponsored && !sponsorName.isEmpty ? sponsorName : nil
                 )
 
                 NotificationCenter.default.post(name: .feedCreated, object: nil)

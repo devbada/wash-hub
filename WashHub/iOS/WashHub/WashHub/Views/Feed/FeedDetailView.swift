@@ -221,9 +221,25 @@ struct FeedDetailView: View {
                         .clipShape(Circle())
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(feed.profiles?.displayName ?? "사용자")
-                                .font(.appCaptionMedium)
-                                .foregroundColor(.theme.textPrimary)
+                            HStack(spacing: 6) {
+                                Text(feed.profiles?.displayName ?? "사용자")
+                                    .font(.appCaptionMedium)
+                                    .foregroundColor(.theme.textPrimary)
+
+                                if feed.isSponsored {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "megaphone.fill")
+                                            .font(.system(size: 9))
+                                        Text(feed.sponsorName ?? "협찬")
+                                            .font(.system(size: 11, weight: .medium))
+                                    }
+                                    .foregroundColor(Color(red: 255/255, green: 176/255, blue: 59/255))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color(red: 255/255, green: 176/255, blue: 59/255).opacity(0.15))
+                                    .cornerRadius(4)
+                                }
+                            }
                             Text(String(feed.createdAt.prefix(10)))
                                 .font(.appSmall)
                                 .foregroundColor(.theme.textDisabled)
