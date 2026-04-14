@@ -45,7 +45,14 @@ struct MyPageView: View {
             }
         }
         .navigationTitle("마이페이지")
-        .sheet(isPresented: $showEditProfile) {
+        .sheet(isPresented: $showEditProfile, onDismiss: {
+            // 프로필 편집 후 최신 프로필 반영 보장
+            Task {
+                if let userId = authManager.currentUser?.id {
+                    await authManager.loadProfile(userId: userId)
+                }
+            }
+        }) {
             EditProfileView()
                 .environmentObject(authManager)
         }
