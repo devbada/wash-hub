@@ -93,6 +93,8 @@ final class AuthManager: ObservableObject {
                     bio: nil,
                     carCount: nil,
                     washCount: nil,
+                    followerCount: 0,
+                    followingCount: 0,
                     isActive: true,
                     titleBadgeId: nil,
                     createdAt: nil,

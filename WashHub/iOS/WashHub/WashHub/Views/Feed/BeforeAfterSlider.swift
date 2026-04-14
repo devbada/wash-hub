@@ -89,13 +89,15 @@ struct BeforeAfterSlider: View {
                     Spacer()
                 }
             }
+            .contentShape(Rectangle())
             .gesture(
-                DragGesture()
+                DragGesture(minimumDistance: 4)
                     .onChanged { value in
                         sliderPosition = max(0.05, min(value.location.x / width, 0.95))
                     }
             )
         }
         .frame(height: 300)
+        .contentShape(Rectangle())
     }
 }

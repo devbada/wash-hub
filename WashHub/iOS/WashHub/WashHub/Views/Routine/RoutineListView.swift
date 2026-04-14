@@ -95,6 +95,7 @@ struct RoutineListView: View {
                 Text("루틴 등록은 로그인 후 이용할 수 있습니다.")
             }
         }
+        .navigationViewStyle(.stack)
         .task {
             await routineService.loadRoutines()
         }

@@ -8,6 +8,8 @@ struct Profile: Identifiable, Codable {
     let bio: String?
     let carCount: Int?
     let washCount: Int?
+    let followerCount: Int?
+    let followingCount: Int?
     let isActive: Bool?
     let titleBadgeId: String?
     let createdAt: String?
@@ -21,6 +23,8 @@ struct Profile: Identifiable, Codable {
         case bio
         case carCount = "car_count"
         case washCount = "wash_count"
+        case followerCount = "follower_count"
+        case followingCount = "following_count"
         case isActive = "is_active"
         case titleBadgeId = "title_badge_id"
         case createdAt = "created_at"

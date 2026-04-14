@@ -40,6 +40,9 @@ struct WashLog: Identifiable, Codable {
     let createdAt: String
     let updatedAt: String
 
+    /// JOIN 시 연결된 피드 요약 정보
+    var feeds: WashLogFeedSummary?
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -50,5 +53,23 @@ struct WashLog: Identifiable, Codable {
         case memo, status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case feeds
+    }
+}
+
+/// 세차 기록에 JOIN 되는 피드 요약 정보
+struct WashLogFeedSummary: Codable {
+    let id: String
+    let title: String?
+    let thumbnailUrl: String?
+    let likeCount: Int
+    let commentCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case thumbnailUrl = "thumbnail_url"
+        case likeCount = "like_count"
+        case commentCount = "comment_count"
     }
 }

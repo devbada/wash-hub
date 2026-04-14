@@ -6,6 +6,7 @@ struct FeedListView: View {
     @State private var currentOffset = 0
     @State private var showLoginAlert = false
     @State private var loadId = UUID()
+    @State private var navigatedFeedId: String?
 
     var body: some View {
         NavigationView {
@@ -54,8 +55,11 @@ struct FeedListView: View {
                                     .padding(.top, 20)
                             } else {
                                 ForEach(feedService.feeds) { feed in
-                                    NavigationLink(destination: FeedDetailView(feedId: feed.id)) {
+                                    Button {
+                                        navigatedFeedId = feed.id
+                                    } label: {
                                         FeedCard(feed: feed)
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     .padding(.horizontal, 16)
@@ -79,8 +83,24 @@ struct FeedListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            // 프로그래밍 방식 네비게이션 — iPad에서 인라인 NavigationLink 터치 이슈 우회
+            .background(
+                NavigationLink(
+                    destination: Group {
+                        if let feedId = navigatedFeedId {
+                            FeedDetailView(feedId: feedId)
+                        }
+                    },
+                    isActive: Binding(
+                        get: { navigatedFeedId != nil },
+                        set: { if !$0 { navigatedFeedId = nil } }
+                    )
+                ) { EmptyView() }
+                .hidden()
+            )
             .navigationBarHidden(true)
         }
+        .navigationViewStyle(.stack)
         .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
             Button("로그인하기") {
                 authManager.exitGuestMode()
@@ -202,13 +222,16 @@ struct FeedCard: View {
                             ProgressView()
                                 .tint(.theme.textDisabled)
                         )
-                case .failure:
+                case .failure(let error):
+                    // 로드 실패 시 디버그 출력 후 첫 번째 feed_image로 fallback
+                    let _ = print("Thumbnail load failed: \(error), url: \(url)")
                     thumbnailPlaceholder
                 @unknown default:
                     thumbnailPlaceholder
                 }
             }
         } else {
+            let _ = print("No valid thumbnail for feed \(feed.id): thumbnailUrl=\(feed.thumbnailUrl ?? "nil")")
             thumbnailPlaceholder
         }
     }

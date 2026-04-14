@@ -37,6 +37,10 @@ struct FeedDetailView: View {
                             extraPhotosSection
                         }
 
+                        // 슬라이더와 정보 영역 구분 — iPad 터치 충돌 방지
+                        Divider()
+                            .background(Color.theme.border)
+
                         // 피드 정보
                         feedInfoSection(feed)
 
@@ -151,29 +155,35 @@ struct FeedDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             // 작성자 정보
             HStack(spacing: 10) {
-                AsyncImage(url: URL(string: feed.profiles?.avatarUrl ?? "")) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Circle().fill(Color.theme.surface)
+                // 작성자 프로필 탭 → UserProfileView 이동
+                NavigationLink(destination: UserProfileView(userId: feed.userId).environmentObject(authManager)) {
+                    HStack(spacing: 10) {
+                        AsyncImage(url: URL(string: feed.profiles?.avatarUrl ?? "")) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Circle().fill(Color.theme.surface)
+                            }
+                        }
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(feed.profiles?.displayName ?? "사용자")
+                                .font(.appCaptionMedium)
+                                .foregroundColor(.theme.textPrimary)
+                            Text(String(feed.createdAt.prefix(10)))
+                                .font(.appSmall)
+                                .foregroundColor(.theme.textDisabled)
+                        }
                     }
                 }
-                .frame(width: 36, height: 36)
-                .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(feed.profiles?.displayName ?? "사용자")
-                        .font(.appCaptionMedium)
-                        .foregroundColor(.theme.textPrimary)
-                    Text(String(feed.createdAt.prefix(10)))
-                        .font(.appSmall)
-                        .foregroundColor(.theme.textDisabled)
-                }
+                .buttonStyle(.plain)
 
                 Spacer()
 
-                // 좋아요 버튼
+                // 좋아요 버튼 — iPad에서 터치 영역 확보
                 Button(action: toggleLike) {
                     HStack(spacing: 4) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
@@ -182,6 +192,9 @@ struct FeedDetailView: View {
                             .font(.appSmall)
                             .foregroundColor(.theme.textSecondary)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
                 }
 
                 // 수정/삭제 메뉴 (본인 글만)

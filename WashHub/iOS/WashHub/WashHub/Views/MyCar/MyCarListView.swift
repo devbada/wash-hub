@@ -33,6 +33,7 @@ struct MyCarListView: View {
                 AddMyCarView { await loadCars() }
             }
         }
+        .navigationViewStyle(.stack)
         .task { await loadCars() }
     }
 
@@ -315,24 +316,9 @@ struct WashLogListView: View {
                     .foregroundColor(.theme.textDisabled)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 12) {
                         ForEach(washLogs) { log in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(log.washDate)
-                                        .font(.appBodyMedium)
-                                        .foregroundColor(.theme.textPrimary)
-                                    if let memo = log.memo {
-                                        Text(memo)
-                                            .font(.appSmall)
-                                            .foregroundColor(.theme.textSecondary)
-                                            .lineLimit(2)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(12)
-                            .cardStyle()
+                            WashLogRow(log: log)
                         }
                     }
                     .padding(16)
@@ -344,7 +330,7 @@ struct WashLogListView: View {
             do {
                 let persistLogs: [WashLog] = try await supabase
                     .from("wash_logs")
-                    .select()
+                    .select("*, feeds(id, title, thumbnail_url, like_count, comment_count)")
                     .eq("car_id", value: car.id)
                     .eq("status", value: "ACTIVE")
                     .order("wash_date", ascending: false)
@@ -356,5 +342,120 @@ struct WashLogListView: View {
             }
             isLoading = false
         }
+    }
+}
+
+// MARK: - 세차 기록 행
+struct WashLogRow: View {
+    let log: WashLog
+
+    /// 썸네일 URL 유효성 판단
+    private var thumbnailURL: URL? {
+        guard let raw = log.feeds?.thumbnailUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              let url = URL(string: raw),
+              let scheme = url.scheme,
+              scheme.hasPrefix("http") else {
+            return nil
+        }
+        return url
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 썸네일 이미지 (피드가 연결되어 있고 이미지가 있을 때)
+            if let url = thumbnailURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .empty:
+                        Rectangle()
+                            .fill(Color.theme.surfaceHigh)
+                            .overlay(
+                                ProgressView()
+                                    .tint(.theme.textDisabled)
+                            )
+                    default:
+                        Rectangle()
+                            .fill(Color.theme.surfaceHigh)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.theme.textDisabled)
+                            )
+                    }
+                }
+                .frame(height: 160)
+                .frame(maxWidth: .infinity)
+                .clipped()
+            }
+
+            // 정보 영역
+            VStack(alignment: .leading, spacing: 8) {
+                // 날짜 + 피드 바로가기
+                HStack {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.theme.secondary)
+                    Text(log.washDate)
+                        .font(.appBodyMedium)
+                        .foregroundColor(.theme.textPrimary)
+
+                    Spacer()
+
+                    // 피드 연결 뱃지
+                    if log.feeds != nil {
+                        NavigationLink(destination: FeedDetailView(feedId: log.feeds!.id)) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.text.image")
+                                    .font(.system(size: 11))
+                                Text("피드 보기")
+                                    .font(.appSmall)
+                            }
+                            .foregroundColor(.theme.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.theme.secondary.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                // 메모
+                if let memo = log.memo, !memo.isEmpty {
+                    Text(memo)
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                // 피드 제목 + 좋아요/댓글 카운트
+                if let feed = log.feeds {
+                    if let title = feed.title, !title.isEmpty {
+                        Text(title)
+                            .font(.appCaption)
+                            .foregroundColor(.theme.textSecondary)
+                            .lineLimit(1)
+                    }
+
+                    HStack(spacing: 12) {
+                        Label("\(feed.likeCount)", systemImage: "heart.fill")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textDisabled)
+                        Label("\(feed.commentCount)", systemImage: "bubble.right.fill")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textDisabled)
+                    }
+                }
+            }
+            .padding(12)
+        }
+        .cardStyle()
     }
 }

@@ -10,6 +10,9 @@ struct MyPageView: View {
     @State private var selectedTab = 0 // 0: 내 피드, 1: 좋아요
     @State private var showEditProfile = false
     @State private var showBadgeCollection = false
+    @State private var showFollowList = false
+    @State private var followListTab: FollowListView.FollowTab = .followers
+    @State private var showFollowingFeed = false
     @State private var showLogoutConfirm = false
     @State private var showWithdrawConfirm = false
     @State private var isWithdrawing = false
@@ -45,10 +48,29 @@ struct MyPageView: View {
             EditProfileView()
                 .environmentObject(authManager)
         }
-        .navigationDestination(isPresented: $showBadgeCollection) {
-            BadgeCollectionView()
-                .environmentObject(authManager)
-        }
+        // NavigationView 호환 — 숨겨진 NavigationLink로 프로그래밍 방식 이동
+        .background(
+            Group {
+                NavigationLink(
+                    destination: BadgeCollectionView().environmentObject(authManager),
+                    isActive: $showBadgeCollection
+                ) { EmptyView() }
+
+                NavigationLink(
+                    destination: FollowListView(
+                        userId: authManager.currentUser?.id ?? "",
+                        userName: authManager.currentUser?.displayName ?? "사용자",
+                        selectedTab: followListTab
+                    ).environmentObject(authManager),
+                    isActive: $showFollowList
+                ) { EmptyView() }
+
+                NavigationLink(
+                    destination: FollowingFeedView().environmentObject(authManager),
+                    isActive: $showFollowingFeed
+                ) { EmptyView() }
+            }
+        )
         .overlay(alignment: .top) {
             if showBadgeToast {
                 badgeToastView
@@ -179,6 +201,23 @@ struct MyPageView: View {
                             .lineLimit(2)
                     }
 
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            followListTab = .followers
+                            showFollowList = true
+                        }) {
+                            Label("팔로워 \(authManager.currentUser?.followerCount ?? 0)", systemImage: "person.2")
+                        }
+                        Button(action: {
+                            followListTab = .followings
+                            showFollowList = true
+                        }) {
+                            Label("팔로잉 \(authManager.currentUser?.followingCount ?? 0)", systemImage: "person.badge.plus")
+                        }
+                    }
+                    .font(.appSmall)
+                    .foregroundColor(.theme.textSecondary)
+
                     HStack(spacing: 16) {
                         Label("차량 \(authManager.currentUser?.carCount ?? 0)", systemImage: "car")
                         Label("세차 \(authManager.currentUser?.washCount ?? 0)", systemImage: "drop.fill")
@@ -191,9 +230,25 @@ struct MyPageView: View {
                 Spacer()
             }
 
-            // 프로필 수정 버튼
-            Button(action: { showEditProfile = true }) {
-                Text("프로필 수정")
+            // 프로필 수정 + 팔로잉 피드 버튼
+            HStack(spacing: 8) {
+                Button(action: { showEditProfile = true }) {
+                    Text("프로필 수정")
+                        .font(.appCaptionMedium)
+                        .foregroundColor(.theme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.theme.surface)
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.theme.border, lineWidth: 1))
+                }
+
+                Button(action: { showFollowingFeed = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "rectangle.stack.person.crop")
+                            .font(.system(size: 12))
+                        Text("팔로잉 피드")
+                    }
                     .font(.appCaptionMedium)
                     .foregroundColor(.theme.textPrimary)
                     .frame(maxWidth: .infinity)
@@ -201,6 +256,7 @@ struct MyPageView: View {
                     .background(Color.theme.surface)
                     .cornerRadius(10)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.theme.border, lineWidth: 1))
+                }
             }
         }
         .padding(16)

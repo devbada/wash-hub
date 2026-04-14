@@ -135,6 +135,7 @@ struct EquipmentListView: View {
                 Text("장비 등록은 로그인 후 이용할 수 있습니다.")
             }
         }
+        .navigationViewStyle(.stack)
         .task { await loadEquipments() }
     }
 
