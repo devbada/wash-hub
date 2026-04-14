@@ -76,6 +76,16 @@ struct RoutineDetailView: View {
             routine = await service.loadRoutine(id: routineId)
             products = await service.loadProducts(routineId: routineId)
         }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                AppUIState.shared.hideBottomUI = true
+            }
+        }
+        .onDisappear {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                AppUIState.shared.hideBottomUI = false
+            }
+        }
     }
 
     // MARK: - Hero Section (Stitch: gradient glow + author bar + stats grid)

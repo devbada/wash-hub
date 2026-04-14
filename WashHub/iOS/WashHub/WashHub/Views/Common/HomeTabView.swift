@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeTabView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @ObservedObject private var uiState = AppUIState.shared
     @State private var selectedTab = 0
     @State private var showLoginAlert = false
     @State private var showCreateFeed = false
@@ -101,10 +102,12 @@ struct HomeTabView: View {
                 }
             }
 
-            // 중앙 FAB
+            // 중앙 FAB — 댓글/루틴 따라하기 시 숨김
             createFloatingButton
-                .offset(y: -2)
-                .allowsHitTesting(true)
+                .offset(y: uiState.hideBottomUI ? 120 : -2)
+                .opacity(uiState.hideBottomUI ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: uiState.hideBottomUI)
+                .allowsHitTesting(!uiState.hideBottomUI)
         }
     }
 
@@ -128,11 +131,14 @@ struct HomeTabView: View {
                 iPadTabBar
             }
 
-            // 우측 하단 FAB
+            // 우측 하단 FAB — 댓글/루틴 따라하기 시 숨김
             createFloatingButton
                 .padding(.trailing, 28)
-                .padding(.bottom, 80) // 탭바 위
-                .allowsHitTesting(true)
+                .padding(.bottom, 80)
+                .offset(y: uiState.hideBottomUI ? 120 : 0)
+                .opacity(uiState.hideBottomUI ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: uiState.hideBottomUI)
+                .allowsHitTesting(!uiState.hideBottomUI)
         }
     }
 

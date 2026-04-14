@@ -4,10 +4,10 @@ struct FeedListView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var feedService = FeedService()
     @ObservedObject private var blockService = BlockService.shared
-    @State private var currentOffset = 0
     @State private var showLoginAlert = false
     @State private var loadId = UUID()
     @State private var navigatedFeedId: String?
+    @ObservedObject private var notificationService = NotificationService.shared
 
     /// 차단 사용자 필터링된 피드 목록
     private var filteredFeeds: [Feed] {
@@ -31,7 +31,6 @@ struct FeedListView: View {
 
                         // 새로고침 버튼
                         Button(action: {
-                            currentOffset = 0
                             loadId = UUID()
                         }) {
                             Image(systemName: "arrow.clockwise")
@@ -39,7 +38,30 @@ struct FeedListView: View {
                                 .foregroundColor(feedService.isLoading ? .theme.textDisabled : .theme.textSecondary)
                         }
                         .disabled(feedService.isLoading)
-                        .padding(.trailing, 8)
+                        .padding(.trailing, 4)
+
+                        // 알림 벨 아이콘
+                        if !authManager.isGuest {
+                            NavigationLink(destination: NotificationListView().environmentObject(authManager)) {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.theme.textSecondary)
+
+                                    if notificationService.unreadCount > 0 {
+                                        Text(notificationService.unreadCount > 99 ? "99+" : "\(notificationService.unreadCount)")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.red)
+                                            .clipShape(Capsule())
+                                            .offset(x: 8, y: -6)
+                                    }
+                                }
+                            }
+                            .padding(.trailing, 8)
+                        }
 
                         if authManager.isGuest {
                             Button(action: { showLoginAlert = true }) {
@@ -82,10 +104,15 @@ struct FeedListView: View {
                                     .buttonStyle(.plain)
                                     .padding(.horizontal, 16)
                                     .onAppear {
-                                        if feed.id == filteredFeeds.last?.id {
-                                            currentOffset += 10
+                                        // 무한 스크롤: 마지막 아이템 근처에서 다음 페이지 로드
+                                        let items = filteredFeeds
+                                        if let index = items.firstIndex(where: { $0.id == feed.id }),
+                                           index >= items.count - 3,
+                                           !feedService.isLoading,
+                                           feedService.hasMorePages {
+                                            let nextOffset = feedService.feeds.count
                                             Task {
-                                                await feedService.loadFeeds(offset: currentOffset)
+                                                await feedService.loadFeeds(offset: nextOffset)
                                             }
                                         }
                                     }
@@ -95,9 +122,6 @@ struct FeedListView: View {
                         .padding(.bottom, 16)
                     }
                     .refreshable {
-                        // loadId 변경 → .task(id:) 재실행으로 새로고침 트리거
-                        // ScrollView + .refreshable 반복 호출 SwiftUI 버그 우회
-                        currentOffset = 0
                         loadId = UUID()
                         // .refreshable spinner가 자연스럽게 닫히도록 약간 대기
                         try? await Task.sleep(nanoseconds: 300_000_000)
@@ -135,11 +159,13 @@ struct FeedListView: View {
             // 최초 로드
             await blockService.loadBlockedIds()
             await feedService.loadFeeds()
+            if !authManager.isGuest {
+                await notificationService.fetchUnreadCount()
+            }
         }
         .onChange(of: loadId) { _ in
             // loadId 변경 시 새로고침 (pull-to-refresh, 버튼, 알림 등)
             Task {
-                currentOffset = 0
                 await blockService.loadBlockedIds()
                 await feedService.loadFeeds(forceRefresh: true)
             }

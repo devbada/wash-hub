@@ -3,6 +3,19 @@ import Vision
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
+/// 모자이크 영역 정보 — 자동 감지 얼굴 또는 수동 드래그 영역
+struct DetectedFace: Identifiable {
+    let id = UUID()
+    /// Vision 정규화 좌표 (좌하단 원점, 0~1) — 수동 영역도 동일 좌표계로 변환하여 저장
+    let normalizedRect: CGRect
+    /// UIKit 좌표계로 변환된 영역 (좌상단 원점, 이미지 크기 기준)
+    let uiRect: CGRect
+    /// 모자이크 적용 여부 (사용자가 토글)
+    var isSelected: Bool = true
+    /// 수동 드래그로 추가된 영역인지 여부
+    var isManual: Bool = false
+}
+
 /// 얼굴 자동 모자이크 서비스
 /// Vision 프레임워크로 얼굴 감지 → Core Image pixellate 필터로 모자이크 처리
 final class FaceMosaicService {
@@ -24,6 +37,39 @@ final class FaceMosaicService {
         return (mosaicImage, faceRects.count)
     }
 
+    /// 이미지에서 얼굴 영역을 감지하여 DetectedFace 배열을 반환한다 (편집 UI용)
+    /// - Parameter image: 원본 UIImage
+    /// - Returns: 감지된 얼굴 배열 (UIKit 좌표 포함)
+    func detectFacesForEditor(in image: UIImage) async -> [DetectedFace] {
+        guard let cgImage = image.cgImage else { return [] }
+        let normalizedRects = await detectFaces(in: cgImage)
+
+        let imgW = image.size.width
+        let imgH = image.size.height
+
+        return normalizedRects.map { rect in
+            // Vision(좌하단 원점, 0~1) → UIKit(좌상단 원점, 픽셀)
+            let uiRect = CGRect(
+                x: rect.origin.x * imgW,
+                y: (1.0 - rect.origin.y - rect.size.height) * imgH,
+                width: rect.size.width * imgW,
+                height: rect.size.height * imgH
+            )
+            return DetectedFace(normalizedRect: rect, uiRect: uiRect)
+        }
+    }
+
+    /// 선택된 얼굴만 모자이크 처리한 이미지를 반환한다
+    /// - Parameters:
+    ///   - image: 원본 UIImage
+    ///   - faces: DetectedFace 배열 (isSelected == true인 얼굴만 모자이크)
+    /// - Returns: 모자이크 적용된 UIImage
+    func mosaicSelectedFaces(in image: UIImage, faces: [DetectedFace]) -> UIImage {
+        let selectedRects = faces.filter { $0.isSelected }.map { $0.normalizedRect }
+        guard !selectedRects.isEmpty else { return image }
+        return applyMosaic(to: image, faceRects: selectedRects)
+    }
+
     /// 얼굴이 포함되어 있는지만 확인한다 (모자이크 없이)
     /// - Parameter image: 검사할 UIImage
     /// - Returns: 감지된 얼굴 수
@@ -31,6 +77,27 @@ final class FaceMosaicService {
         guard let cgImage = image.cgImage else { return 0 }
         let faceRects = await detectFaces(in: cgImage)
         return faceRects.count
+    }
+
+    /// 수동 드래그 영역으로 DetectedFace를 생성한다
+    /// - Parameters:
+    ///   - uiRect: UIKit 좌표 기준 영역 (이미지 크기 기준)
+    ///   - imageSize: 원본 이미지 크기
+    /// - Returns: DetectedFace (isManual = true)
+    func createManualRegion(uiRect: CGRect, imageSize: CGSize) -> DetectedFace {
+        // UIKit(좌상단 원점) → Vision 정규화(좌하단 원점, 0~1)
+        let normalizedRect = CGRect(
+            x: uiRect.origin.x / imageSize.width,
+            y: 1.0 - (uiRect.origin.y + uiRect.size.height) / imageSize.height,
+            width: uiRect.size.width / imageSize.width,
+            height: uiRect.size.height / imageSize.height
+        )
+        return DetectedFace(
+            normalizedRect: normalizedRect,
+            uiRect: uiRect,
+            isSelected: true,
+            isManual: true
+        )
     }
 
     // MARK: - 얼굴 감지 (Vision)

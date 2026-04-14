@@ -233,7 +233,12 @@ struct FollowRoutineView: View {
         .disabled(executionService.isCompleted)
     }
 
-    // MARK: - Bottom Actions (Stitch: 포기/완료 side by side)
+    /// 모든 스텝이 완료되었는지 여부
+    private var allStepsCompleted: Bool {
+        completedCount >= totalCount && totalCount > 0
+    }
+
+    // MARK: - Bottom Actions (포기 / 다음 or 완료)
     private var bottomActions: some View {
         HStack(spacing: 12) {
             Button(action: { showAbandonAlert = true }) {
@@ -241,13 +246,18 @@ struct FollowRoutineView: View {
                     .destructiveButtonStyle()
             }
 
-            Button(action: {
-                Task {
-                    await executionService.completeExecution()
-                    showCompleteAlert = true
-                }
-            }) {
-                Text("완료하기")
+            if allStepsCompleted {
+                // 모든 스텝 완료 → "완료하기" 버튼
+                Button(action: {
+                    Task {
+                        await executionService.completeExecution()
+                        showCompleteAlert = true
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("완료하기")
+                    }
                     .font(.appBodyBold)
                     .foregroundColor(.theme.surface)
                     .frame(maxWidth: .infinity)
@@ -261,11 +271,37 @@ struct FollowRoutineView: View {
                     )
                     .cornerRadius(12)
                     .shadow(color: Color.theme.secondary.opacity(0.3), radius: 10, x: 0, y: 4)
+                }
+                .disabled(!isStarted || executionService.isCompleted)
+                .opacity(!isStarted || executionService.isCompleted ? 0.4 : 1.0)
+            } else {
+                // 아직 남은 스텝 → "다음" 버튼 (현재 스텝 완료 처리)
+                Button(action: {
+                    Task {
+                        await advanceToNextStep()
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Text("다음")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.appBodyBold)
+                    .foregroundColor(.theme.surface)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.theme.secondary, Color.theme.secondary.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(12)
+                    .shadow(color: Color.theme.secondary.opacity(0.3), radius: 10, x: 0, y: 4)
+                }
+                .disabled(!isStarted || executionService.isCompleted)
+                .opacity(!isStarted || executionService.isCompleted ? 0.4 : 1.0)
             }
-            // 진행 중(실행 시작됨 && 아직 완료되지 않음)이면 언제든 수동 완료 가능.
-            // 체크리스트 일부만 완료해도 사용자가 즉시 마무리할 수 있도록 열어둔다.
-            .disabled(!isStarted || executionService.isCompleted)
-            .opacity(!isStarted || executionService.isCompleted ? 0.4 : 1.0)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -273,6 +309,25 @@ struct FollowRoutineView: View {
             Color.theme.surfaceLow.opacity(0.8)
                 .background(.ultraThinMaterial)
         )
+    }
+
+    /// "다음" 버튼: 현재 첫 번째 미완료 스텝을 완료 처리
+    private func advanceToNextStep() async {
+        // 첫 번째 미완료 스텝 찾기
+        guard let nextStep = sortedSteps.first(where: { step in
+            let exec = executionService.executionSteps.first { $0.stepId == step.id }
+            return !(exec?.completed ?? false)
+        }),
+        let execStep = executionService.executionSteps.first(where: { $0.stepId == nextStep.id }) else {
+            return
+        }
+
+        await executionService.toggleStep(executionStepId: execStep.id)
+
+        // 전체 완료 시 자동 완료 알림
+        if executionService.isCompleted {
+            showCompleteAlert = true
+        }
     }
 
     // MARK: - Helpers

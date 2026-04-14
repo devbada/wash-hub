@@ -25,6 +25,7 @@ struct FeedDetailView: View {
     @State private var blockTargetName: String?
     @Environment(\.presentationMode) var presentationMode
     @FocusState private var isCommentFocused: Bool
+    private let uiState = AppUIState.shared
 
     /// 댓글 상대 시간 실시간 갱신용 (30초 간격)
     @State private var now = Date()
@@ -163,6 +164,14 @@ struct FeedDetailView: View {
         }
         .onReceive(timer) { time in
             now = time
+        }
+        .onChange(of: isCommentFocused) { focused in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                uiState.hideBottomUI = focused
+            }
+        }
+        .onDisappear {
+            uiState.hideBottomUI = false
         }
     }
 

@@ -527,7 +527,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 }
 
 // MARK: - 이미지 소스 선택 ActionSheet 뷰
-/// 앨범/카메라 선택 → 이미지 선택 → 모더레이션(NSFW 차단 + 얼굴 모자이크)
+/// 앨범/카메라 선택 → 이미지 선택 → 모더레이션(NSFW 차단 + 얼굴 모자이크 편집)
 struct ImageSourcePicker: View {
     @Binding var isPresented: Bool
     var skipFaceMosaic: Bool = false  // 프로필 사진 등 얼굴 모자이크 제외
@@ -538,6 +538,10 @@ struct ImageSourcePicker: View {
     @State private var showBlockedAlert = false
     @State private var showProcessing = false
     @State private var moderationMessage = ""
+    // 얼굴 모자이크 편집
+    @State private var showFaceEditor = false
+    @State private var faceEditorImage: UIImage?
+    @State private var detectedFaces: [DetectedFace] = []
 
     var body: some View {
         ZStack {
@@ -586,6 +590,23 @@ struct ImageSourcePicker: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showFaceEditor) {
+            if let image = faceEditorImage {
+                FaceMosaicEditorView(
+                    originalImage: image,
+                    detectedFaces: $detectedFaces,
+                    onConfirm: { finalImage in
+                        showFaceEditor = false
+                        faceEditorImage = nil
+                        onImageReady(finalImage)
+                    },
+                    onCancel: {
+                        showFaceEditor = false
+                        faceEditorImage = nil
+                    }
+                )
+            }
+        }
     }
 
     private func processImage(_ image: UIImage) {
@@ -593,15 +614,39 @@ struct ImageSourcePicker: View {
         moderationMessage = "이미지 검사 중..."
 
         Task {
-            let result = await ImageModerationHelper.shared.process(image: image, skipFaceMosaic: skipFaceMosaic)
+            // Step 1: NSFW 체크
+            let nsfwResult = await NSFWDetector.shared.classify(image: image)
+            guard nsfwResult.isSafe else {
+                await MainActor.run {
+                    showProcessing = false
+                    showBlockedAlert = true
+                }
+                return
+            }
+
+            // Step 2: 얼굴 모자이크 처리
+            if skipFaceMosaic {
+                await MainActor.run {
+                    showProcessing = false
+                    onImageReady(image)
+                }
+                return
+            }
+
+            // 얼굴 감지
+            moderationMessage = "얼굴 감지 중..."
+            let faces = await FaceMosaicService.shared.detectFacesForEditor(in: image)
 
             await MainActor.run {
                 showProcessing = false
-                switch result {
-                case .allowed(let processedImage):
-                    onImageReady(processedImage)
-                case .blocked:
-                    showBlockedAlert = true
+                if faces.isEmpty {
+                    // 얼굴 없음 → 바로 통과
+                    onImageReady(image)
+                } else {
+                    // 얼굴 있음 → 편집 화면으로 이동
+                    faceEditorImage = image
+                    detectedFaces = faces
+                    showFaceEditor = true
                 }
             }
         }

@@ -6,6 +6,7 @@ import Supabase
 final class FeedService: ObservableObject {
     @Published var feeds: [Feed] = []
     @Published var isLoading = false
+    @Published var hasMorePages = true
 
     private let pageSize = 10
 
@@ -13,9 +14,13 @@ final class FeedService: ObservableObject {
 
     // MARK: - 피드 목록 조회
     func loadFeeds(offset: Int = 0, forceRefresh: Bool = false) async {
+        // 이미 로딩 중이면 중복 호출 방지 (forceRefresh 제외)
+        if isLoading && !forceRefresh { return }
+        // 추가 페이지 요청인데 더 이상 페이지가 없으면 무시
+        if offset > 0 && !hasMorePages { return }
+
         isLoading = true
         do {
-            // forceRefresh가 아닌 경우에만 취소 체크 (새로고침은 취소되지 않도록)
             if !forceRefresh {
                 try Task.checkCancellation()
             }
@@ -31,13 +36,22 @@ final class FeedService: ObservableObject {
             if !forceRefresh {
                 try Task.checkCancellation()
             }
+
+            // 서버가 pageSize 미만을 반환하면 마지막 페이지
+            if persistFeeds.count < pageSize {
+                hasMorePages = false
+            }
+
             if offset == 0 {
                 feeds = persistFeeds
+                hasMorePages = persistFeeds.count >= pageSize
             } else {
-                feeds.append(contentsOf: persistFeeds)
+                // 중복 피드 방지: 이미 존재하는 ID 제외
+                let existingIds = Set(feeds.map { $0.id })
+                let newFeeds = persistFeeds.filter { !existingIds.contains($0.id) }
+                feeds.append(contentsOf: newFeeds)
             }
         } catch is CancellationError {
-            // Task 취소는 정상 동작 (뷰 전환 등) — 무시
             print("Feed load cancelled (normal)")
         } catch {
             print("Feed load error: \(error)")
