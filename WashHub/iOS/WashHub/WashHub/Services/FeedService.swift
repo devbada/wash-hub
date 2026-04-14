@@ -12,10 +12,13 @@ final class FeedService: ObservableObject {
     private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year)"
 
     // MARK: - 피드 목록 조회
-    func loadFeeds(offset: Int = 0) async {
+    func loadFeeds(offset: Int = 0, forceRefresh: Bool = false) async {
         isLoading = true
         do {
-            try Task.checkCancellation()
+            // forceRefresh가 아닌 경우에만 취소 체크 (새로고침은 취소되지 않도록)
+            if !forceRefresh {
+                try Task.checkCancellation()
+            }
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
                 .select(feedSelect)
@@ -25,8 +28,9 @@ final class FeedService: ObservableObject {
                 .execute()
                 .value
 
-            // Task가 취소되지 않았을 때만 UI 업데이트
-            try Task.checkCancellation()
+            if !forceRefresh {
+                try Task.checkCancellation()
+            }
             if offset == 0 {
                 feeds = persistFeeds
             } else {

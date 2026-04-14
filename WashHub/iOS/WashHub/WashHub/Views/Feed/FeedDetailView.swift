@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct FeedDetailView: View {
     let feedId: String
@@ -24,6 +25,10 @@ struct FeedDetailView: View {
     @State private var blockTargetName: String?
     @Environment(\.presentationMode) var presentationMode
     @FocusState private var isCommentFocused: Bool
+
+    /// 댓글 상대 시간 실시간 갱신용 (30초 간격)
+    @State private var now = Date()
+    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -155,6 +160,9 @@ struct FeedDetailView: View {
             isLiked = await feedService.isLiked(feedId: feedId)
             await blockService.loadBlockedIds()
             await commentService.loadComments(feedId: feedId)
+        }
+        .onReceive(timer) { time in
+            now = time
         }
     }
 
@@ -365,6 +373,7 @@ struct FeedDetailView: View {
                         canEdit: commentService.canEdit(comment: comment),
                         isGuest: authManager.isGuest,
                         isFeedOwner: isMyFeed,
+                        now: now,
                         onEdit: { newContent in
                             Task {
                                 try? await commentService.updateComment(
@@ -504,6 +513,7 @@ struct CommentRow: View {
     var canEdit: Bool = false
     var isGuest: Bool = false
     var isFeedOwner: Bool = false  // 피드 작성자 여부
+    var now: Date = Date()  // 타이머에서 주입 — 상대시간 실시간 갱신
     var onEdit: ((String) -> Void)?
     var onDelete: (() -> Void)?
     var onReport: (() -> Void)?
@@ -578,7 +588,7 @@ struct CommentRow: View {
                     Text(comment.profiles?.displayName ?? "사용자")
                         .font(.appCaptionMedium)
                         .foregroundColor(.theme.textPrimary)
-                    Text(timeAgo(from: comment.createdAt))
+                    Text(Date.relativeTime(from: comment.createdAt, now: now))
                         .font(.appSmall)
                         .foregroundColor(.theme.textDisabled)
 
@@ -697,25 +707,6 @@ struct CommentRow: View {
             .frame(width: 28, height: 28)
     }
 
-    // 상대 시간 표시
-    private func timeAgo(from dateString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = formatter.date(from: dateString)
-        if date == nil {
-            let fallback = ISO8601DateFormatter()
-            fallback.formatOptions = [.withInternetDateTime]
-            date = fallback.date(from: dateString)
-        }
-        guard let created = date else { return String(dateString.prefix(10)) }
-
-        let interval = Date().timeIntervalSince(created)
-        if interval < 60 { return "방금 전" }
-        if interval < 3600 { return "\(Int(interval / 60))분 전" }
-        if interval < 86400 { return "\(Int(interval / 3600))시간 전" }
-        if interval < 604800 { return "\(Int(interval / 86400))일 전" }
-        return String(dateString.prefix(10))
-    }
 }
 
 // MARK: - 피드 수정

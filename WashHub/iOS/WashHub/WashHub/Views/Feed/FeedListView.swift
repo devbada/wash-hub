@@ -29,6 +29,18 @@ struct FeedListView: View {
 
                         Spacer()
 
+                        // 새로고침 버튼
+                        Button(action: {
+                            currentOffset = 0
+                            loadId = UUID()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(feedService.isLoading ? .theme.textDisabled : .theme.textSecondary)
+                        }
+                        .disabled(feedService.isLoading)
+                        .padding(.trailing, 8)
+
                         if authManager.isGuest {
                             Button(action: { showLoginAlert = true }) {
                                 profileAvatarView
@@ -83,8 +95,12 @@ struct FeedListView: View {
                         .padding(.bottom, 16)
                     }
                     .refreshable {
+                        // loadId 변경 → .task(id:) 재실행으로 새로고침 트리거
+                        // ScrollView + .refreshable 반복 호출 SwiftUI 버그 우회
                         currentOffset = 0
-                        await feedService.loadFeeds()
+                        loadId = UUID()
+                        // .refreshable spinner가 자연스럽게 닫히도록 약간 대기
+                        try? await Task.sleep(nanoseconds: 300_000_000)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -115,10 +131,18 @@ struct FeedListView: View {
         } message: {
             Text("마이페이지는 로그인 후 이용할 수 있습니다.")
         }
-        .task(id: loadId) {
-            currentOffset = 0
+        .task {
+            // 최초 로드
             await blockService.loadBlockedIds()
             await feedService.loadFeeds()
+        }
+        .onChange(of: loadId) { _ in
+            // loadId 변경 시 새로고침 (pull-to-refresh, 버튼, 알림 등)
+            Task {
+                currentOffset = 0
+                await blockService.loadBlockedIds()
+                await feedService.loadFeeds(forceRefresh: true)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .feedCreated)) { _ in
             loadId = UUID()
