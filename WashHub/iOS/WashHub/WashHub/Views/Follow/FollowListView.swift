@@ -86,6 +86,8 @@ struct FollowListView: View {
                                         guard let myId = authManager.currentUser?.id else { return }
                                         let success = await followService.toggleFollow(myId: myId, targetId: user.id)
                                         if success {
+                                            // followingIds 및 목록 갱신
+                                            await loadData()
                                             await authManager.loadProfile(userId: myId)
                                         }
                                     }

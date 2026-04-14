@@ -29,6 +29,14 @@ struct FeedListView: View {
 
                         Spacer()
 
+                        // 검색 버튼
+                        NavigationLink(destination: SearchView().environmentObject(authManager)) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.theme.textSecondary)
+                        }
+                        .padding(.trailing, 4)
+
                         // 새로고침 버튼
                         Button(action: {
                             loadId = UUID()

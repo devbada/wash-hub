@@ -273,7 +273,14 @@ struct UserProfileView: View {
     private func toggleFollow() async {
         guard let myId = authManager.currentUser?.id else { return }
         isLoadingFollow = true
-        let success = await followService.toggleFollow(myId: myId, targetId: userId)
+        // 로컬 isFollowing 상태 기반으로 팔로우/언팔로우 분기
+        // (followService.followingIds가 로드되지 않은 경우 toggleFollow가 항상 follow만 시도하는 버그 방지)
+        let success: Bool
+        if isFollowing {
+            success = await followService.unfollow(followerId: myId, followingId: userId)
+        } else {
+            success = await followService.follow(followerId: myId, followingId: userId)
+        }
         if success {
             isFollowing.toggle()
             // 프로필 갱신 (카운터 반영)
