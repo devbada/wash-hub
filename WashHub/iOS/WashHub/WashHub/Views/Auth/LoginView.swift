@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -39,7 +40,20 @@ struct LoginView: View {
                 Spacer()
 
                 // 로그인 버튼 영역
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
+                    // Apple 로그인 — Apple HIG 가이드라인 준수
+                    SignInWithAppleButton(.signIn) { request in
+                        let appleRequest = authManager.prepareAppleSignIn()
+                        request.requestedScopes = appleRequest.requestedScopes
+                        request.nonce = appleRequest.nonce
+                    } onCompletion: { result in
+                        handleAppleLogin(result: result)
+                    }
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 52)
+                    .cornerRadius(12)
+                    .disabled(isLoading)
+
                     // Google 로그인 — Surface 카드 스타일
                     Button(action: handleGoogleLogin) {
                         HStack(spacing: 10) {
@@ -74,6 +88,7 @@ struct LoginView: View {
                             .foregroundColor(.theme.textSecondary)
                             .underline()
                     }
+                    .padding(.top, 4)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 60)
@@ -90,6 +105,37 @@ struct LoginView: View {
         }
     }
 
+    // MARK: - Apple 로그인 처리
+    private func handleAppleLogin(result: Result<ASAuthorization, Error>) {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                switch result {
+                case .success(let authorization):
+                    guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                        errorMessage = "Apple 인증 정보를 가져올 수 없습니다."
+                        isLoading = false
+                        return
+                    }
+                    try await authManager.handleAppleCredential(credential)
+                case .failure(let error):
+                    // 사용자가 취소한 경우는 에러 메시지 표시하지 않음
+                    if (error as? ASAuthorizationError)?.code != .canceled {
+                        errorMessage = "Apple 로그인에 실패했습니다. 다시 시도해주세요."
+                    }
+                    print("Apple Sign-In error: \(error)")
+                }
+            } catch {
+                print("Apple login error: \(error)")
+                errorMessage = "Apple 로그인에 실패했습니다. 다시 시도해주세요."
+            }
+            isLoading = false
+        }
+    }
+
+    // MARK: - Google 로그인 처리
     private func handleGoogleLogin() {
         isLoading = true
         errorMessage = nil

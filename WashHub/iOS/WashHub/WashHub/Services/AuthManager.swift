@@ -1,6 +1,8 @@
 import Foundation
 import Supabase
 import Combine
+import AuthenticationServices
+import CryptoKit
 
 @MainActor
 final class AuthManager: ObservableObject {
@@ -42,6 +44,84 @@ final class AuthManager: ObservableObject {
             provider: .google,
             redirectTo: URL(string: "\(AppConfig.bundleID)://callback")
         )
+    }
+
+    // MARK: - Apple 로그인
+    /// Apple Sign-In nonce (CSRF 방지)
+    private var currentNonce: String?
+
+    /// Apple Sign-In 요청 시작
+    func prepareAppleSignIn() -> ASAuthorizationAppleIDRequest {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+        return request
+    }
+
+    /// Apple credential 수신 후 Supabase 로그인
+    func handleAppleCredential(_ credential: ASAuthorizationAppleIDCredential) async throws {
+        guard let identityTokenData = credential.identityToken,
+              let identityToken = String(data: identityTokenData, encoding: .utf8) else {
+            throw AppleSignInError.missingToken
+        }
+        guard let nonce = currentNonce else {
+            throw AppleSignInError.missingNonce
+        }
+
+        // Supabase Auth — Apple ID Token으로 로그인
+        try await supabase.auth.signInWithIdToken(
+            credentials: .init(
+                provider: .apple,
+                idToken: identityToken,
+                nonce: nonce
+            )
+        )
+
+        currentNonce = nil
+        await checkSession()
+    }
+
+    /// 랜덤 nonce 생성 (Secure Coding)
+    private func randomNonceString(length: Int = 32) -> String {
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+        while remainingLength > 0 {
+            var randomBytes = [UInt8](repeating: 0, count: 16)
+            let status = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+            guard status == errSecSuccess else { continue }
+            randomBytes.forEach { byte in
+                if remainingLength == 0 { return }
+                if byte < charset.count {
+                    result.append(charset[Int(byte)])
+                    remainingLength -= 1
+                }
+            }
+        }
+        return result
+    }
+
+    /// SHA256 해시 (nonce → Apple 전달용)
+    private func sha256(_ input: String) -> String {
+        let data = Data(input.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    enum AppleSignInError: LocalizedError {
+        case missingToken
+        case missingNonce
+
+        var errorDescription: String? {
+            switch self {
+            case .missingToken: return "Apple 인증 토큰을 가져올 수 없습니다."
+            case .missingNonce: return "인증 요청이 올바르지 않습니다. 다시 시도해주세요."
+            }
+        }
     }
 
     // MARK: - 딥링크 세션 처리
