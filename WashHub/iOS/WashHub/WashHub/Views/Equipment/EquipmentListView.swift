@@ -315,6 +315,11 @@ struct EquipmentDetailView: View {
                                 .foregroundColor(.theme.textDisabled)
                         }
 
+                        // MARK: - 제휴 구매 링크
+                        if !equipment.affiliateLinks.isEmpty {
+                            affiliateSection
+                        }
+
                         Divider().background(Color.theme.border)
 
                         // MARK: - 리뷰 섹션
@@ -473,6 +478,81 @@ struct EquipmentDetailView: View {
                         }
                     )
                 }
+            }
+        }
+    }
+
+    // MARK: - 제휴 구매 섹션
+    private var affiliateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("구매하기")
+                .font(.appHeadline3)
+                .foregroundColor(.theme.textPrimary)
+
+            ForEach(equipment.affiliateLinks) { link in
+                Button(action: {
+                    Task { await trackAndOpen(link: link) }
+                }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: link.provider.iconName)
+                            .font(.system(size: 16))
+                            .foregroundColor(.theme.secondary)
+                            .frame(width: 32, height: 32)
+                            .background(Color.theme.secondary.opacity(0.12))
+                            .cornerRadius(8)
+
+                        Text("\(link.provider.displayName)에서 구매")
+                            .font(.appBodyMedium)
+                            .foregroundColor(.theme.textPrimary)
+
+                        Spacer()
+
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 14))
+                            .foregroundColor(.theme.textDisabled)
+                    }
+                    .padding(12)
+                    .background(Color.theme.surfaceHigh)
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.theme.border, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("외부 사이트로 이동합니다")
+                .font(.appSmall)
+                .foregroundColor(.theme.textDisabled)
+        }
+    }
+
+    /// 클릭 추적 후 외부 URL 열기
+    private func trackAndOpen(link: AffiliateLink) async {
+        // 1) 클릭 추적 (로그인 사용자만)
+        if let userId = authManager.currentUser?.id {
+            do {
+                let click = AffiliateClick(
+                    equipmentId: equipment.id,
+                    userId: userId,
+                    provider: link.provider.rawValue,
+                    status: "ACTIVE"
+                )
+                try await supabase
+                    .from("affiliate_clicks")
+                    .insert(click)
+                    .execute()
+            } catch {
+                // 클릭 추적 실패해도 URL은 열어야 함
+                print("Affiliate click track error: \(error)")
+            }
+        }
+
+        // 2) Safari로 열기
+        if let url = URL(string: link.url) {
+            await MainActor.run {
+                UIApplication.shared.open(url)
             }
         }
     }
