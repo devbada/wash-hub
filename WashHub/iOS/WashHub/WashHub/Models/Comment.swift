@@ -10,6 +10,8 @@ struct Comment: Identifiable, Codable {
     let createdAt: String
     let updatedAt: String
     let isEdited: Bool
+    let isHidden: Bool
+    let hiddenBy: String?
 
     /// JOIN 시 작성자 프로필
     var profiles: Profile?
@@ -23,6 +25,8 @@ struct Comment: Identifiable, Codable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case isEdited = "is_edited"
+        case isHidden = "is_hidden"
+        case hiddenBy = "hidden_by"
         case profiles
     }
 }

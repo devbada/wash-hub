@@ -6,6 +6,7 @@ struct FeedDetailView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var feedService = FeedService()
     @StateObject private var commentService = CommentService()
+    @ObservedObject private var blockService = BlockService.shared
     @State private var feed: Feed?
     @State private var beforeImages: [FeedImage] = []
     @State private var afterImages: [FeedImage] = []
@@ -15,6 +16,12 @@ struct FeedDetailView: View {
     @State private var showLoginAlert = false
     @State private var showDeleteConfirm = false
     @State private var showEditSheet = false
+    @State private var showReportSheet = false
+    @State private var showReportCommentSheet = false
+    @State private var reportTargetCommentId: String?
+    @State private var showBlockConfirm = false
+    @State private var blockTargetUserId: String?
+    @State private var blockTargetName: String?
     @Environment(\.presentationMode) var presentationMode
     @FocusState private var isCommentFocused: Bool
 
@@ -104,6 +111,41 @@ struct FeedDetailView: View {
                 }
             }
         }
+        // 피드 신고 시트
+        .sheet(isPresented: $showReportSheet) {
+            ReportSheet(
+                targetType: .feed,
+                targetId: feedId,
+                onReported: nil
+            )
+        }
+        // 댓글 신고 시트
+        .sheet(isPresented: $showReportCommentSheet) {
+            if let commentId = reportTargetCommentId {
+                ReportSheet(
+                    targetType: .comment,
+                    targetId: commentId,
+                    onReported: nil
+                )
+            }
+        }
+        // 사용자 차단 확인
+        .alert("사용자 차단", isPresented: $showBlockConfirm) {
+            Button("취소", role: .cancel) {
+                blockTargetUserId = nil
+                blockTargetName = nil
+            }
+            Button("차단", role: .destructive) {
+                guard let targetId = blockTargetUserId else { return }
+                Task {
+                    try? await blockService.blockUser(blockedId: targetId)
+                    // 차단 후 이전 화면으로 돌아감
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }
+        } message: {
+            Text("\(blockTargetName ?? "이 사용자")를 차단하시겠습니까?\n차단하면 해당 사용자의 피드와 댓글이 표시되지 않습니다.")
+        }
         .task {
             feed = await feedService.loadFeed(id: feedId)
             let images = await feedService.loadFeedImages(feedId: feedId)
@@ -111,6 +153,7 @@ struct FeedDetailView: View {
             afterImages = images.filter { $0.imageType == "AFTER" }
             extraImages = images.filter { $0.imageType == "EXTRA" }
             isLiked = await feedService.isLiked(feedId: feedId)
+            await blockService.loadBlockedIds()
             await commentService.loadComments(feedId: feedId)
         }
     }
@@ -197,8 +240,9 @@ struct FeedDetailView: View {
                     .contentShape(Rectangle())
                 }
 
-                // 수정/삭제 메뉴 (본인 글만)
+                // 더보기 메뉴
                 if isMyFeed {
+                    // 본인 글: 수정/삭제
                     Menu {
                         Button(action: { showEditSheet = true }) {
                             Label("수정", systemImage: "pencil")
@@ -207,6 +251,25 @@ struct FeedDetailView: View {
                             showDeleteConfirm = true
                         }) {
                             Label("삭제", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16))
+                            .foregroundColor(.theme.textSecondary)
+                            .frame(width: 32, height: 32)
+                    }
+                } else if !authManager.isGuest {
+                    // 타인 글: 신고/차단
+                    Menu {
+                        Button(action: { showReportSheet = true }) {
+                            Label("피드 신고", systemImage: "exclamationmark.triangle")
+                        }
+                        Button(role: .destructive, action: {
+                            blockTargetUserId = feed.userId
+                            blockTargetName = feed.profiles?.displayName ?? "이 사용자"
+                            showBlockConfirm = true
+                        }) {
+                            Label("사용자 차단", systemImage: "hand.raised")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -274,27 +337,34 @@ struct FeedDetailView: View {
         .padding(16)
     }
 
+    /// 차단 사용자 제외된 댓글 목록
+    private var filteredComments: [Comment] {
+        commentService.comments.filter { !blockService.isBlocked($0.userId) }
+    }
+
     // MARK: - 댓글 섹션
     private var commentsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("댓글 \(commentService.comments.count)")
+            Text("댓글 \(filteredComments.count)")
                 .font(.appCaptionMedium)
                 .foregroundColor(.theme.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
-            if commentService.comments.isEmpty {
+            if filteredComments.isEmpty {
                 Text("아직 댓글이 없습니다. 첫 댓글을 남겨보세요!")
                     .font(.appSmall)
                     .foregroundColor(.theme.textDisabled)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
             } else {
-                ForEach(commentService.comments) { comment in
+                ForEach(filteredComments) { comment in
                     CommentRow(
                         comment: comment,
                         isOwner: comment.userId == authManager.currentUser?.id,
                         canEdit: commentService.canEdit(comment: comment),
+                        isGuest: authManager.isGuest,
+                        isFeedOwner: isMyFeed,
                         onEdit: { newContent in
                             Task {
                                 try? await commentService.updateComment(
@@ -315,6 +385,31 @@ struct FeedDetailView: View {
                                     name: .feedCountChanged,
                                     object: nil,
                                     userInfo: ["feedId": feedId]
+                                )
+                            }
+                        },
+                        onReport: {
+                            reportTargetCommentId = comment.id
+                            showReportCommentSheet = true
+                        },
+                        onBlock: {
+                            blockTargetUserId = comment.userId
+                            blockTargetName = comment.profiles?.displayName ?? "이 사용자"
+                            showBlockConfirm = true
+                        },
+                        onHide: {
+                            Task {
+                                try? await commentService.hideComment(
+                                    commentId: comment.id,
+                                    feedId: feedId
+                                )
+                            }
+                        },
+                        onUnhide: {
+                            Task {
+                                try? await commentService.unhideComment(
+                                    commentId: comment.id,
+                                    feedId: feedId
                                 )
                             }
                         }
@@ -407,14 +502,65 @@ struct CommentRow: View {
     let comment: Comment
     var isOwner: Bool = false
     var canEdit: Bool = false
+    var isGuest: Bool = false
+    var isFeedOwner: Bool = false  // 피드 작성자 여부
     var onEdit: ((String) -> Void)?
     var onDelete: (() -> Void)?
+    var onReport: (() -> Void)?
+    var onBlock: (() -> Void)?
+    var onHide: (() -> Void)?
+    var onUnhide: (() -> Void)?
 
     @State private var isEditing = false
     @State private var editText = ""
     @State private var showDeleteConfirm = false
 
     var body: some View {
+        if comment.isHidden {
+            // 숨김 처리된 댓글
+            hiddenCommentView
+        } else {
+            // 일반 댓글
+            normalCommentView
+        }
+    }
+
+    // MARK: - 숨김 처리된 댓글 표시
+    /// content는 DB 트리거에서 이미 "숨김 처리된 댓글입니다."로 마스킹되어 내려옴
+    private var hiddenCommentView: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "eye.slash.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.theme.textDisabled)
+
+            Text(comment.content)
+                .font(.appCaption)
+                .foregroundColor(.theme.textDisabled)
+                .italic()
+
+            Spacer()
+
+            // 피드 작성자에게만 숨김 해제 버튼 표시
+            if isFeedOwner {
+                Button(action: { onUnhide?() }) {
+                    Text("숨김 해제")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.theme.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - 일반 댓글 표시
+    private var normalCommentView: some View {
         HStack(alignment: .top, spacing: 10) {
             AsyncImage(url: URL(string: comment.profiles?.avatarUrl ?? "")) { phase in
                 switch phase {
@@ -438,29 +584,8 @@ struct CommentRow: View {
 
                     Spacer()
 
-                    // 수정/삭제 메뉴 (본인 댓글만)
-                    if isOwner {
-                        Menu {
-                            if canEdit {
-                                Button(action: {
-                                    editText = comment.content
-                                    isEditing = true
-                                }) {
-                                    Label("수정", systemImage: "pencil")
-                                }
-                            }
-                            Button(role: .destructive, action: {
-                                showDeleteConfirm = true
-                            }) {
-                                Label("삭제", systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 14))
-                                .foregroundColor(.theme.textDisabled)
-                                .frame(width: 28, height: 28)
-                        }
-                    }
+                    // 더보기 메뉴
+                    commentMenu
                 }
 
                 if isEditing {
@@ -511,6 +636,65 @@ struct CommentRow: View {
         } message: {
             Text("이 댓글을 삭제하시겠습니까?")
         }
+    }
+
+    // MARK: - 댓글 메뉴
+    @ViewBuilder
+    private var commentMenu: some View {
+        if isOwner {
+            // 본인 댓글: 수정/삭제
+            Menu {
+                if canEdit {
+                    Button(action: {
+                        editText = comment.content
+                        isEditing = true
+                    }) {
+                        Label("수정", systemImage: "pencil")
+                    }
+                }
+                Button(role: .destructive, action: {
+                    showDeleteConfirm = true
+                }) {
+                    Label("삭제", systemImage: "trash")
+                }
+            } label: {
+                ellipsisIcon
+            }
+        } else if isFeedOwner {
+            // 피드 작성자가 타인 댓글을 볼 때: 숨기기 + 신고/차단
+            Menu {
+                Button(action: { onHide?() }) {
+                    Label("댓글 숨기기", systemImage: "eye.slash")
+                }
+                Button(action: { onReport?() }) {
+                    Label("댓글 신고", systemImage: "exclamationmark.triangle")
+                }
+                Button(role: .destructive, action: { onBlock?() }) {
+                    Label("사용자 차단", systemImage: "hand.raised")
+                }
+            } label: {
+                ellipsisIcon
+            }
+        } else if !isGuest {
+            // 일반 사용자가 타인 댓글을 볼 때: 신고/차단
+            Menu {
+                Button(action: { onReport?() }) {
+                    Label("댓글 신고", systemImage: "exclamationmark.triangle")
+                }
+                Button(role: .destructive, action: { onBlock?() }) {
+                    Label("사용자 차단", systemImage: "hand.raised")
+                }
+            } label: {
+                ellipsisIcon
+            }
+        }
+    }
+
+    private var ellipsisIcon: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 14))
+            .foregroundColor(.theme.textDisabled)
+            .frame(width: 28, height: 28)
     }
 
     // 상대 시간 표시

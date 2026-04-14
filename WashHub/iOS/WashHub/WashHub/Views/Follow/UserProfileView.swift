@@ -14,6 +14,9 @@ struct UserProfileView: View {
     @State private var isLoadingFollow = false
     @State private var showFollowList = false
     @State private var followListTab: FollowListView.FollowTab = .followers
+    @State private var showReportSheet = false
+    @State private var showBlockConfirm = false
+    @ObservedObject private var blockService = BlockService.shared
 
     var body: some View {
         ZStack {
@@ -43,6 +46,42 @@ struct UserProfileView: View {
                 selectedTab: followListTab
             )
             .environmentObject(authManager)
+        }
+        .toolbar {
+            // 타인 프로필에서 신고/차단 메뉴
+            if userId != authManager.currentUser?.id && !authManager.isGuest {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button(action: { showReportSheet = true }) {
+                            Label("사용자 신고", systemImage: "exclamationmark.triangle")
+                        }
+                        Button(role: .destructive, action: { showBlockConfirm = true }) {
+                            Label("사용자 차단", systemImage: "hand.raised")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16))
+                            .foregroundColor(.theme.textSecondary)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showReportSheet) {
+            ReportSheet(
+                targetType: .user,
+                targetId: userId,
+                onReported: nil
+            )
+        }
+        .alert("사용자 차단", isPresented: $showBlockConfirm) {
+            Button("취소", role: .cancel) {}
+            Button("차단", role: .destructive) {
+                Task {
+                    try? await blockService.blockUser(blockedId: userId)
+                }
+            }
+        } message: {
+            Text("\(profile?.displayName ?? "이 사용자")를 차단하시겠습니까?\n차단하면 해당 사용자의 피드와 댓글이 표시되지 않습니다.")
         }
         .task {
             await loadAll()

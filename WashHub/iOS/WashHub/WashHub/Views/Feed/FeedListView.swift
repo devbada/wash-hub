@@ -3,10 +3,16 @@ import SwiftUI
 struct FeedListView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var feedService = FeedService()
+    @ObservedObject private var blockService = BlockService.shared
     @State private var currentOffset = 0
     @State private var showLoginAlert = false
     @State private var loadId = UUID()
     @State private var navigatedFeedId: String?
+
+    /// 차단 사용자 필터링된 피드 목록
+    private var filteredFeeds: [Feed] {
+        feedService.feeds.filter { !blockService.isBlocked($0.userId) }
+    }
 
     var body: some View {
         NavigationView {
@@ -50,11 +56,11 @@ struct FeedListView: View {
                                     .tint(.theme.secondary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.top, 40)
-                            } else if feedService.feeds.isEmpty {
+                            } else if filteredFeeds.isEmpty {
                                 emptyView
                                     .padding(.top, 20)
                             } else {
-                                ForEach(feedService.feeds) { feed in
+                                ForEach(filteredFeeds) { feed in
                                     Button {
                                         navigatedFeedId = feed.id
                                     } label: {
@@ -64,7 +70,7 @@ struct FeedListView: View {
                                     .buttonStyle(.plain)
                                     .padding(.horizontal, 16)
                                     .onAppear {
-                                        if feed.id == feedService.feeds.last?.id {
+                                        if feed.id == filteredFeeds.last?.id {
                                             currentOffset += 10
                                             Task {
                                                 await feedService.loadFeeds(offset: currentOffset)
@@ -111,6 +117,7 @@ struct FeedListView: View {
         }
         .task(id: loadId) {
             currentOffset = 0
+            await blockService.loadBlockedIds()
             await feedService.loadFeeds()
         }
         .onReceive(NotificationCenter.default.publisher(for: .feedCreated)) { _ in
@@ -125,6 +132,10 @@ struct FeedListView: View {
             } else {
                 loadId = UUID()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .blockStatusChanged)) { _ in
+            // 차단/해제 시 피드 전체 리로드 — AsyncImage 캐시 갱신
+            loadId = UUID()
         }
     }
 

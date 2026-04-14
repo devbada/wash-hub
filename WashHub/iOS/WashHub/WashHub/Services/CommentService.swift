@@ -9,9 +9,10 @@ final class CommentService: ObservableObject {
     // MARK: - 댓글 목록 조회
     func loadComments(feedId: String) async {
         do {
+            // original_content 제외 — 숨김 원본은 클라이언트에 노출하지 않음
             let persistComments: [Comment] = try await supabase
                 .from("comments")
-                .select("*, profiles!user_id(id, nickname, avatar_url)")
+                .select("id, feed_id, user_id, parent_comment_id, content, status, created_at, updated_at, is_edited, is_hidden, hidden_by, profiles!user_id(id, nickname, avatar_url)")
                 .eq("feed_id", value: feedId)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: true)
@@ -67,6 +68,37 @@ final class CommentService: ObservableObject {
         try await supabase
             .from("comments")
             .update(["status": "DELETED"])
+            .eq("id", value: commentId)
+            .execute()
+
+        await loadComments(feedId: feedId)
+    }
+
+    // MARK: - 댓글 숨기기 (피드 작성자 전용)
+    func hideComment(commentId: String, feedId: String) async throws {
+        let session = try await supabase.auth.session
+        struct HideUpdate: Encodable {
+            let is_hidden: Bool
+            let hidden_by: String
+        }
+        try await supabase
+            .from("comments")
+            .update(HideUpdate(is_hidden: true, hidden_by: session.user.id.uuidString))
+            .eq("id", value: commentId)
+            .execute()
+
+        await loadComments(feedId: feedId)
+    }
+
+    // MARK: - 댓글 숨김 해제 (피드 작성자 전용)
+    func unhideComment(commentId: String, feedId: String) async throws {
+        struct UnhideUpdate: Encodable {
+            let is_hidden: Bool
+            let hidden_by: String?
+        }
+        try await supabase
+            .from("comments")
+            .update(UnhideUpdate(is_hidden: false, hidden_by: nil))
             .eq("id", value: commentId)
             .execute()
 

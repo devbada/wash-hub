@@ -13,6 +13,7 @@ struct MyPageView: View {
     @State private var showFollowList = false
     @State private var followListTab: FollowListView.FollowTab = .followers
     @State private var showFollowingFeed = false
+    @State private var showBlockedUsers = false
     @State private var showLogoutConfirm = false
     @State private var showWithdrawConfirm = false
     @State private var isWithdrawing = false
@@ -68,6 +69,11 @@ struct MyPageView: View {
                 NavigationLink(
                     destination: FollowingFeedView().environmentObject(authManager),
                     isActive: $showFollowingFeed
+                ) { EmptyView() }
+
+                NavigationLink(
+                    destination: BlockedUsersListView(),
+                    isActive: $showBlockedUsers
                 ) { EmptyView() }
             }
         )
@@ -467,6 +473,20 @@ struct MyPageView: View {
     // MARK: - 설정
     private var settingsSection: some View {
         VStack(spacing: 8) {
+            // 차단 관리
+            Button(action: { showBlockedUsers = true }) {
+                HStack {
+                    Text("차단 관리")
+                        .font(.appBody)
+                        .foregroundColor(.theme.textSecondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .padding(16)
+                .cardStyle()
+            }
+
             Button(action: { showLogoutConfirm = true }) {
                 HStack {
                     Text("로그아웃")
