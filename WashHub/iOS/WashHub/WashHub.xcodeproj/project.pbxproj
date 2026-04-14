@@ -433,7 +433,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WashHub/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_CFBundleDisplayName = WashHub;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "세차 사진을 촬영하기 위해 카메라 접근이 필요합니다";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "주변 세차장을 찾고 정확한 날씨 정보를 제공하기 위해 위치 정보가 필요합니다.";
@@ -477,7 +477,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WashHub/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_CFBundleDisplayName = WashHub;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "세차 사진을 촬영하기 위해 카메라 접근이 필요합니다";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "주변 세차장을 찾고 정확한 날씨 정보를 제공하기 위해 위치 정보가 필요합니다.";

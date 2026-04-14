@@ -14,6 +14,8 @@ struct MyPageView: View {
     @State private var followListTab: FollowListView.FollowTab = .followers
     @State private var showFollowingFeed = false
     @State private var showBlockedUsers = false
+    @State private var showTerms = false
+    @State private var showPrivacy = false
     @State private var showLogoutConfirm = false
     @State private var showWithdrawConfirm = false
     @State private var isWithdrawing = false
@@ -90,6 +92,12 @@ struct MyPageView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .zIndex(100)
             }
+        }
+        .sheet(isPresented: $showTerms) {
+            LegalDocumentView(title: "이용약관", url: LegalURLs.termsOfService)
+        }
+        .sheet(isPresented: $showPrivacy) {
+            LegalDocumentView(title: "개인정보처리방침", url: LegalURLs.privacyPolicy)
         }
         .task {
             await loadData()
@@ -484,6 +492,34 @@ struct MyPageView: View {
             Button(action: { showBlockedUsers = true }) {
                 HStack {
                     Text("차단 관리")
+                        .font(.appBody)
+                        .foregroundColor(.theme.textSecondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .padding(16)
+                .cardStyle()
+            }
+
+            // 이용약관
+            Button(action: { showTerms = true }) {
+                HStack {
+                    Text("이용약관")
+                        .font(.appBody)
+                        .foregroundColor(.theme.textSecondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .padding(16)
+                .cardStyle()
+            }
+
+            // 개인정보처리방침
+            Button(action: { showPrivacy = true }) {
+                HStack {
+                    Text("개인정보처리방침")
                         .font(.appBody)
                         .foregroundColor(.theme.textSecondary)
                     Spacer()

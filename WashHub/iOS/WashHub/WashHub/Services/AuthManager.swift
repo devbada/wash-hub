@@ -9,6 +9,7 @@ final class AuthManager: ObservableObject {
     @Published var isLoading = true
     @Published var isAuthenticated = false
     @Published var isGuestMode = false
+    @Published var needsTermsAgreement = false
     @Published var needsNicknameSetup = false
     @Published var currentUser: Profile?
 
@@ -153,6 +154,8 @@ final class AuthManager: ObservableObject {
                 .value
 
             currentUser = persistProfile
+            // 약관 미동의 시 약관 동의 화면으로
+            needsTermsAgreement = (persistProfile.agreedTermsAt == nil)
             // 닉네임이 이메일과 같거나 nil이면 닉네임 설정 필요
             needsNicknameSetup = (persistProfile.nickname == nil
                 || persistProfile.nickname == persistProfile.username)
@@ -177,14 +180,31 @@ final class AuthManager: ObservableObject {
                     followingCount: 0,
                     isActive: true,
                     titleBadgeId: nil,
+                    agreedTermsAt: nil,
                     createdAt: nil,
                     updatedAt: nil
                 )
             } catch {
                 print("Auth session 도 없음 — 미인증 상태: \(error)")
             }
+            needsTermsAgreement = true
             needsNicknameSetup = true
         }
+    }
+
+    // MARK: - 약관 동의 처리
+    func agreeToTerms() async throws {
+        let session = try await supabase.auth.session
+        let userId = session.user.id.uuidString
+
+        // agreed_terms_at을 현재 시각으로 업데이트
+        try await supabase
+            .from("profiles")
+            .update(["agreed_terms_at": ISO8601DateFormatter().string(from: Date())])
+            .eq("id", value: userId)
+            .execute()
+
+        needsTermsAgreement = false
     }
 
     // MARK: - 닉네임 업데이트

@@ -8,7 +8,9 @@ struct ContentView: View {
             if authManager.isLoading {
                 SplashView()
             } else if authManager.isAuthenticated {
-                if authManager.needsNicknameSetup {
+                if authManager.needsTermsAgreement {
+                    TermsAgreementView()
+                } else if authManager.needsNicknameSetup {
                     NicknameSetupView()
                 } else {
                     HomeTabView()

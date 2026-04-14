@@ -12,6 +12,7 @@ struct Profile: Identifiable, Codable {
     let followingCount: Int?
     let isActive: Bool?
     let titleBadgeId: String?
+    let agreedTermsAt: String?
     let createdAt: String?
     let updatedAt: String?
 
@@ -27,6 +28,7 @@ struct Profile: Identifiable, Codable {
         case followingCount = "following_count"
         case isActive = "is_active"
         case titleBadgeId = "title_badge_id"
+        case agreedTermsAt = "agreed_terms_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
