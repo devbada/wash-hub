@@ -22,6 +22,7 @@ struct CreateFeedView: View {
 
     // 이미지 피커 상태
     @State private var activePickerType: ImagePickerType?
+    @State private var showImageSourcePicker = false
 
     enum ImagePickerType: Identifiable {
         case before, after, extra
@@ -247,18 +248,28 @@ struct CreateFeedView: View {
             .task {
                 await loadMyCars()
             }
-            .sheet(item: $activePickerType) { type in
-                ImagePicker { image in
-                    switch type {
-                    case .before:
-                        if beforeImages.count < 5 { beforeImages.append(image) }
-                    case .after:
-                        if afterImages.count < 5 { afterImages.append(image) }
-                    case .extra:
-                        if extraImages.count < 10 { extraImages.append(image) }
-                    }
+            .onChange(of: activePickerType) { newValue in
+                if newValue != nil {
+                    showImageSourcePicker = true
                 }
             }
+            .background(
+                ImageSourcePicker(
+                    isPresented: $showImageSourcePicker,
+                    onImageReady: { image in
+                        guard let type = activePickerType else { return }
+                        switch type {
+                        case .before:
+                            if beforeImages.count < 5 { beforeImages.append(image) }
+                        case .after:
+                            if afterImages.count < 5 { afterImages.append(image) }
+                        case .extra:
+                            if extraImages.count < 10 { extraImages.append(image) }
+                        }
+                        activePickerType = nil
+                    }
+                )
+            )
         }
     }
 
@@ -447,14 +458,15 @@ struct CreateFeedView: View {
     }
 }
 
-// MARK: - UIKit ImagePicker (iOS 15 호환)
+// MARK: - UIKit ImagePicker (iOS 15 호환 — 앨범 + 카메라 지원)
 struct ImagePicker: UIViewControllerRepresentable {
+    var sourceType: UIImagePickerController.SourceType = .photoLibrary
     var onImagePicked: (UIImage) -> Void
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
+        picker.sourceType = sourceType
         picker.allowsEditing = false
         return picker
     }
@@ -484,6 +496,88 @@ struct ImagePicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             picker.dismiss(animated: true)
+        }
+    }
+}
+
+// MARK: - 이미지 소스 선택 ActionSheet 뷰
+/// 앨범/카메라 선택 → 이미지 선택 → 모더레이션(NSFW 차단 + 얼굴 모자이크)
+struct ImageSourcePicker: View {
+    @Binding var isPresented: Bool
+    var skipFaceMosaic: Bool = false  // 프로필 사진 등 얼굴 모자이크 제외
+    var onImageReady: (UIImage) -> Void
+
+    @State private var showPhotoPicker = false
+    @State private var showCamera = false
+    @State private var showBlockedAlert = false
+    @State private var showProcessing = false
+    @State private var moderationMessage = ""
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .confirmationDialog("사진 추가", isPresented: $isPresented, titleVisibility: .visible) {
+                    Button("앨범에서 선택") {
+                        showPhotoPicker = true
+                    }
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button("카메라로 촬영") {
+                            showCamera = true
+                        }
+                    }
+                    Button("취소", role: .cancel) {}
+                }
+                .sheet(isPresented: $showPhotoPicker) {
+                    ImagePicker(sourceType: .photoLibrary) { image in
+                        processImage(image)
+                    }
+                }
+                .sheet(isPresented: $showCamera) {
+                    ImagePicker(sourceType: .camera) { image in
+                        processImage(image)
+                    }
+                }
+                .alert("업로드 불가", isPresented: $showBlockedAlert) {
+                    Button("확인", role: .cancel) {}
+                } message: {
+                    Text("부적절한 이미지로 판단되어 업로드할 수 없습니다.")
+                }
+        }
+        .overlay {
+            if showProcessing {
+                ZStack {
+                    Color.black.opacity(0.4).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .tint(.theme.secondary)
+                            .scaleEffect(1.2)
+                        Text(moderationMessage)
+                            .font(.appCaption)
+                            .foregroundColor(.white)
+                    }
+                    .padding(24)
+                    .background(Color.theme.neutral.cornerRadius(16))
+                }
+            }
+        }
+    }
+
+    private func processImage(_ image: UIImage) {
+        showProcessing = true
+        moderationMessage = "이미지 검사 중..."
+
+        Task {
+            let result = await ImageModerationHelper.shared.process(image: image, skipFaceMosaic: skipFaceMosaic)
+
+            await MainActor.run {
+                showProcessing = false
+                switch result {
+                case .allowed(let processedImage):
+                    onImageReady(processedImage)
+                case .blocked:
+                    showBlockedAlert = true
+                }
+            }
         }
     }
 }

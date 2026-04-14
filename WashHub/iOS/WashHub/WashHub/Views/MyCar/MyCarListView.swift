@@ -148,7 +148,7 @@ struct AddMyCarView: View {
     @State private var isPrimary = false
     @State private var isLoading = false
     @State private var carImage: UIImage?
-    @State private var showImagePicker = false
+    @State private var showImageSourcePicker = false
     var onComplete: () async -> Void
 
     var body: some View {
@@ -166,7 +166,7 @@ struct AddMyCarView: View {
 
                             Button(action: {
                                 hideKeyboard()
-                                showImagePicker = true
+                                showImageSourcePicker = true
                             }) {
                                 if let carImage = carImage {
                                     ZStack(alignment: .topTrailing) {
@@ -242,11 +242,14 @@ struct AddMyCarView: View {
                         .foregroundColor(.theme.textSecondary)
                 }
             }
-            .sheet(isPresented: $showImagePicker) {
-                ImagePicker { image in
-                    carImage = image
-                }
-            }
+            .background(
+                ImageSourcePicker(
+                    isPresented: $showImageSourcePicker,
+                    onImageReady: { image in
+                        carImage = image
+                    }
+                )
+            )
         }
     }
 

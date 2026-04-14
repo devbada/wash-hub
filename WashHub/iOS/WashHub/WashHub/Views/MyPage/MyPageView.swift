@@ -589,7 +589,7 @@ struct EditProfileView: View {
     @State private var bio = ""
     @State private var isLoading = false
     @State private var showSuccess = false
-    @State private var showImagePicker = false
+    @State private var showImageSourcePicker = false
     @State private var selectedAvatar: UIImage?
     @State private var errorMessage: String?
 
@@ -600,7 +600,7 @@ struct EditProfileView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         // 아바타 (탭으로 변경)
-                        Button(action: { showImagePicker = true }) {
+                        Button(action: { showImageSourcePicker = true }) {
                             ZStack(alignment: .bottomTrailing) {
                                 Group {
                                     if let selectedAvatar = selectedAvatar {
@@ -701,11 +701,15 @@ struct EditProfileView: View {
             } message: {
                 Text("프로필이 업데이트되었습니다.")
             }
-            .sheet(isPresented: $showImagePicker) {
-                ImagePicker { image in
-                    selectedAvatar = image
-                }
-            }
+            .background(
+                ImageSourcePicker(
+                    isPresented: $showImageSourcePicker,
+                    skipFaceMosaic: true,  // 프로필 사진은 얼굴 모자이크 제외
+                    onImageReady: { image in
+                        selectedAvatar = image
+                    }
+                )
+            )
             .onAppear {
                 nickname = authManager.currentUser?.nickname ?? ""
                 originalNickname = nickname
