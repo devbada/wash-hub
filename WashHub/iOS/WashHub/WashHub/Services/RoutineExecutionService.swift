@@ -21,12 +21,20 @@ final class RoutineExecutionService: ObservableObject {
         ]).execute()
 
         // 2. 각 step에 대한 실행 step 생성
+        struct StepInsert: Encodable {
+            let execution_id: String
+            let step_id: String
+            let completed: Bool
+        }
         for step in steps {
-            try await supabase.from("routine_execution_steps").insert([
-                "execution_id": executionId,
-                "step_id": step.id,
-                "completed": "false"
-            ]).execute()
+            let stepInsert = StepInsert(
+                execution_id: executionId,
+                step_id: step.id,
+                completed: false
+            )
+            try await supabase.from("routine_execution_steps")
+                .insert(stepInsert)
+                .execute()
         }
 
         // 3. 현재 상태 로드

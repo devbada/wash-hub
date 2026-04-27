@@ -141,7 +141,6 @@ final class AuthManager: ObservableObject {
     }
 
     // MARK: - 프로필 로드
-    // TODO-minam: .single() 이 실패하면 currentUser = nil 이 되어 닉네임 설정 등 후속 로직이 막힘
     // 방어: profiles 행이 없으면 auth session 에서 임시 Profile 을 구성해 최소 동작 보장
     func loadProfile(userId: String) async {
         do {
@@ -163,33 +162,39 @@ final class AuthManager: ObservableObject {
             print("Profile load error (profiles 행 미존재 가능): \(error)")
             // profiles 행이 없어도 임시 Profile 으로 currentUser 를 채워 NicknameSetupView 가 동작하도록 함
             // updateNickname 에서 upsert 로 실제 행이 생성됨
-            do {
-                let session = try await supabase.auth.session
-                let email = session.user.email
-                let avatarUrl = session.user.userMetadata["avatar_url"]?.stringValue
-                    ?? session.user.userMetadata["picture"]?.stringValue
-                currentUser = Profile(
-                    id: userId,
-                    username: email,
-                    nickname: nil,
-                    avatarUrl: avatarUrl,
-                    bio: nil,
-                    carCount: nil,
-                    washCount: nil,
-                    followerCount: 0,
-                    followingCount: 0,
-                    isActive: true,
-                    titleBadgeId: nil,
-                    agreedTermsAt: nil,
-                    createdAt: nil,
-                    updatedAt: nil
-                )
-            } catch {
-                print("Auth session 도 없음 — 미인증 상태: \(error)")
-            }
+            let fallbackProfile = buildFallbackProfile(userId: userId)
+            currentUser = fallbackProfile
             needsTermsAgreement = true
             needsNicknameSetup = true
         }
+    }
+
+    /// Auth 세션에서 최소한의 임시 Profile을 구성 (profiles 행 미존재 시 방어)
+    private func buildFallbackProfile(userId: String) -> Profile {
+        // auth session에서 메타데이터 추출 시도
+        var email: String? = nil
+        var avatarUrl: String? = nil
+        if let session = try? supabase.auth.currentSession {
+            email = session.user.email
+            avatarUrl = session.user.userMetadata["avatar_url"]?.stringValue
+                ?? session.user.userMetadata["picture"]?.stringValue
+        }
+        return Profile(
+            id: userId,
+            username: email,
+            nickname: nil,
+            avatarUrl: avatarUrl,
+            bio: nil,
+            carCount: nil,
+            washCount: nil,
+            followerCount: 0,
+            followingCount: 0,
+            isActive: true,
+            titleBadgeId: nil,
+            agreedTermsAt: nil,
+            createdAt: nil,
+            updatedAt: nil
+        )
     }
 
     // MARK: - 약관 동의 처리
@@ -209,17 +214,17 @@ final class AuthManager: ObservableObject {
 
     // MARK: - 닉네임 업데이트
     // TODO-minam: currentUser 가 nil 이어도 auth session 에서 userId 를 직접 가져옴
-    // profiles 행이 없으면 upsert 로 자동 생성 (트리거 실패 시 방어)
+    // upsert 유지 (트리거 실패 시 profiles 행 자동 생성) + agreed_terms_at 포함 (유실 방지)
     func updateNickname(_ nickname: String) async throws {
         let session = try await supabase.auth.session
         let userId = session.user.id.uuidString
 
-        // upsert — profiles 행이 이미 있으면 nickname 만 갱신, 없으면 신규 생성
         struct ProfileUpsert: Encodable {
             let id: String
             let nickname: String
             let username: String?
             let avatar_url: String?
+            let agreed_terms_at: String
         }
 
         let email = session.user.email
@@ -230,7 +235,8 @@ final class AuthManager: ObservableObject {
             id: userId,
             nickname: nickname,
             username: email,
-            avatar_url: avatarUrl
+            avatar_url: avatarUrl,
+            agreed_terms_at: ISO8601DateFormatter().string(from: Date())
         )
 
         try await supabase

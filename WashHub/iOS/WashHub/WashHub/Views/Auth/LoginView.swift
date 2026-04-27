@@ -49,7 +49,7 @@ struct LoginView: View {
                     } onCompletion: { result in
                         handleAppleLogin(result: result)
                     }
-                    .signInWithAppleButtonStyle(.white)
+                    .signInWithAppleButtonStyle(.black)
                     .frame(height: 52)
                     .cornerRadius(12)
                     .disabled(isLoading)

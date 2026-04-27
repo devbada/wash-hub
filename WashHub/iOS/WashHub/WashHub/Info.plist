@@ -11,7 +11,7 @@
 			<string>com.devbada.WashHub</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.washhub.ios</string>
+				<string>com.devbada.WashHub</string>
 			</array>
 		</dict>
 	</array>

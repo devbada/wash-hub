@@ -2,6 +2,17 @@ import Foundation
 import Combine
 import Supabase
 
+enum ReportError: LocalizedError {
+    case notAuthenticated
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated:
+            return "로그인이 필요합니다. 다시 로그인해주세요."
+        }
+    }
+}
+
 @MainActor
 final class ReportService: ObservableObject {
     @Published var myReports: [Report] = []
@@ -23,7 +34,7 @@ final class ReportService: ObservableObject {
         }
 
         guard let userId = supabase.auth.currentUser?.id.uuidString else {
-            return
+            throw ReportError.notAuthenticated // TODO-minam
         }
 
         let insert = ReportInsert(
