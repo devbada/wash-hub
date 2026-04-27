@@ -23,6 +23,7 @@ struct FeedDetailView: View {
     @State private var showBlockConfirm = false
     @State private var blockTargetUserId: String?
     @State private var blockTargetName: String?
+    @State private var showBlockedToast = false
     @Environment(\.presentationMode) var presentationMode
     @FocusState private var isCommentFocused: Bool
     private let uiState = AppUIState.shared
@@ -74,6 +75,29 @@ struct FeedDetailView: View {
             } else {
                 ProgressView()
                     .tint(.theme.secondary)
+            }
+        }
+        .overlay(alignment: .top) {
+            if showBlockedToast {
+                HStack(spacing: 10) {
+                    Image(systemName: "hand.raised.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.theme.error)
+                    Text("\(blockTargetName ?? "사용자")를 차단했습니다")
+                        .font(.appCaptionMedium)
+                        .foregroundColor(.theme.textPrimary)
+                    Spacer()
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.theme.surfaceLowest)
+                        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -145,8 +169,21 @@ struct FeedDetailView: View {
                 guard let targetId = blockTargetUserId else { return }
                 Task {
                     try? await blockService.blockUser(blockedId: targetId)
-                    // 차단 후 이전 화면으로 돌아감
-                    presentationMode.wrappedValue.dismiss()
+                    // 차단 후 댓글 목록 새로고침 (차단 사용자 댓글 즉시 숨김)
+                    await commentService.loadComments(feedId: feedId)
+                    // 피드 작성자를 차단한 경우 이전 화면으로 돌아감
+                    if targetId == feed?.userId {
+                        withAnimation(.spring()) { showBlockedToast = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    } else {
+                        // 댓글 작성자 차단 → 토스트만 표시
+                        withAnimation(.spring()) { showBlockedToast = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            withAnimation { showBlockedToast = false }
+                        }
+                    }
                 }
             }
         } message: {
@@ -164,6 +201,13 @@ struct FeedDetailView: View {
         }
         .onReceive(timer) { time in
             now = time
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { notification in
+            // 다른 화면(UserProfileView)에서 차단된 경우 → 이 피드 작성자면 자동 dismiss
+            if let blockedId = notification.userInfo?["blockedId"] as? String,
+               blockedId == feed?.userId {
+                presentationMode.wrappedValue.dismiss()
+            }
         }
         .onChange(of: isCommentFocused) { focused in
             withAnimation(.easeInOut(duration: 0.3)) {

@@ -16,7 +16,9 @@ struct UserProfileView: View {
     @State private var followListTab: FollowListView.FollowTab = .followers
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
+    @State private var showBlockedToast = false
     @ObservedObject private var blockService = BlockService.shared
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         ZStack {
@@ -78,14 +80,55 @@ struct UserProfileView: View {
             Button("차단", role: .destructive) {
                 Task {
                     try? await blockService.blockUser(blockedId: userId)
+                    // 차단 완료 알림 — FeedDetailView 등 중간 화면도 자동 dismiss
+                    NotificationCenter.default.post(
+                        name: .userBlocked,
+                        object: nil,
+                        userInfo: ["blockedId": userId]
+                    )
+                    withAnimation(.spring()) {
+                        showBlockedToast = true
+                    }
+                    // 1.5초 후 이전 화면으로 복귀
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 }
             }
         } message: {
             Text("\(profile?.displayName ?? "이 사용자")를 차단하시겠습니까?\n차단하면 해당 사용자의 피드와 댓글이 표시되지 않습니다.")
         }
+        .overlay(alignment: .top) {
+            if showBlockedToast {
+                blockedToastView
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(100)
+            }
+        }
         .task {
             await loadAll()
         }
+    }
+
+    // MARK: - 차단 완료 토스트
+    private var blockedToastView: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hand.raised.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.theme.error)
+            Text("\(profile?.displayName ?? "사용자")를 차단했습니다")
+                .font(.appCaptionMedium)
+                .foregroundColor(.theme.textPrimary)
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.theme.surfaceLowest)
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     // MARK: - 프로필 헤더

@@ -4,6 +4,7 @@ import Supabase
 @main
 struct WashHubApp: App {
     @StateObject private var authManager = AuthManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -15,6 +16,13 @@ struct WashHubApp: App {
                         await authManager.handleDeepLink(url: url)
                     }
                 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    await DynamicIconService.shared.updateIconIfNeeded()
+                }
+            }
         }
     }
 }

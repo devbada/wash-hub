@@ -1,6 +1,6 @@
 import Foundation
 
-struct MyCar: Identifiable, Codable {
+struct MyCar: Identifiable, Codable, Hashable {
     let id: String
     let userId: String
     let carModel: String

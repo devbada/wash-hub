@@ -13,25 +13,6 @@ struct HomeTabView: View {
         horizontalSizeClass == .regular
     }
 
-    init() {
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor.white
-        appearance.shadowColor = UIColor(white: 0, alpha: 0.06)
-        appearance.shadowImage = nil
-
-        let olive = UIColor(red: 101/255, green: 163/255, blue: 13/255, alpha: 1.0)
-        let zinc = UIColor(red: 113/255, green: 113/255, blue: 122/255, alpha: 1.0)
-
-        appearance.stackedLayoutAppearance.selected.iconColor = olive
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: olive]
-        appearance.stackedLayoutAppearance.normal.iconColor = zinc
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: zinc]
-
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-    }
-
     var body: some View {
         Group {
             if isWideLayout {
@@ -54,64 +35,36 @@ struct HomeTabView: View {
         }
     }
 
-    // MARK: - iPhone 레이아웃 (기존 TabView + 중앙 FAB)
+    // MARK: - iPhone 레이아웃 (커스텀 탭바 + 중앙 FAB)
     private var iPhoneLayout: some View {
         ZStack(alignment: .bottom) {
-            TabView(selection: $selectedTab) {
-                FeedListView()
-                    .tabItem {
-                        Image(systemName: "photo.stack")
-                        Text("피드")
+            VStack(spacing: 0) {
+                // 콘텐츠 영역
+                Group {
+                    switch selectedTab {
+                    case 0:  FeedListView()
+                    case 2:  RoutineListView()
+                    case 3:  EquipmentListView()
+                    case 4:  MyCarListView()
+                    default: FeedListView()
                     }
-                    .tag(0)
-
-                RoutineListView()
-                    .tabItem {
-                        Image(systemName: "list.bullet.clipboard")
-                        Text("루틴")
-                    }
-                    .tag(2)
-
-                // 플레이스홀더 — FAB이 덮음
-                Color.clear
-                    .tabItem { Text(" ") }
-                    .tag(1)
-
-                EquipmentListView()
-                    .tabItem {
-                        Image(systemName: "drop.circle")
-                        Text("케미컬")
-                    }
-                    .tag(3)
-
-                MyCarListView()
-                    .tabItem {
-                        Image(systemName: "car.fill")
-                        Text("내차")
-                    }
-                    .tag(4)
-            }
-            .tint(.theme.secondary)
-            .onChange(of: selectedTab) { _, newTab in
-                if newTab == 1 {
-                    selectedTab = 0
-                    handleCreateTap()
-                } else if authManager.isGuest && newTab == 4 {
-                    selectedTab = 0
-                    showLoginAlert = true
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // 커스텀 하단 탭바
+                customTabBar
             }
 
             // 중앙 FAB — 댓글/루틴 따라하기 시 숨김
             createFloatingButton
-                .offset(y: uiState.hideBottomUI ? 120 : -2)
+                .offset(y: uiState.hideBottomUI ? 120 : 6)
                 .opacity(uiState.hideBottomUI ? 0 : 1)
                 .animation(.easeInOut(duration: 0.3), value: uiState.hideBottomUI)
                 .allowsHitTesting(!uiState.hideBottomUI)
         }
     }
 
-    // MARK: - iPad 레이아웃 (커스텀 하단 탭바 + 우측 하단 FAB)
+    // MARK: - iPad 레이아웃 (커스텀 탭바 + 우측 하단 FAB)
     private var iPadLayout: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
@@ -128,7 +81,7 @@ struct HomeTabView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // 커스텀 하단 탭바
-                iPadTabBar
+                customTabBar
             }
 
             // 우측 하단 FAB — 댓글/루틴 따라하기 시 숨김
@@ -142,20 +95,19 @@ struct HomeTabView: View {
         }
     }
 
-    // MARK: - iPad 커스텀 탭바
-    private var iPadTabBar: some View {
+    // MARK: - 커스텀 탭바 (iPhone + iPad 공용)
+    private var customTabBar: some View {
         HStack(spacing: 0) {
-            iPadTabButton(title: "피드", icon: "photo.stack", tag: 0)
-            iPadTabButton(title: "루틴", icon: "list.bullet.clipboard", tag: 2)
+            tabButton(icon: "photo.stack", filledIcon: "photo.stack.fill", tag: 0)
+            tabButton(icon: "list.bullet.clipboard", filledIcon: "list.bullet.clipboard.fill", tag: 2)
 
             // 가운데 FAB 공간
             Spacer().frame(width: 96)
 
-            iPadTabButton(title: "케미컬", icon: "drop.circle", tag: 3)
-            iPadTabButton(title: "내차", icon: "car.fill", tag: 4)
+            tabButton(icon: "drop.circle", filledIcon: "drop.circle.fill", tag: 3)
+            tabButton(icon: "car", filledIcon: "car.fill", tag: 4)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .background(
             Color.white
@@ -164,7 +116,7 @@ struct HomeTabView: View {
         )
     }
 
-    private func iPadTabButton(title: String, icon: String, tag: Int) -> some View {
+    private func tabButton(icon: String, filledIcon: String, tag: Int) -> some View {
         Button {
             if authManager.isGuest && tag == 4 {
                 showLoginAlert = true
@@ -172,19 +124,16 @@ struct HomeTabView: View {
                 selectedTab = tag
             }
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 22))
-                Text(title)
-                    .font(.system(size: 10))
-            }
-            .foregroundColor(
-                selectedTab == tag
-                    ? Color(red: 101/255, green: 163/255, blue: 13/255) // olive
-                    : Color(red: 113/255, green: 113/255, blue: 122/255) // zinc
-            )
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
+            Image(systemName: selectedTab == tag ? filledIcon : icon)
+                .font(.system(size: 24))
+                .foregroundColor(
+                    selectedTab == tag
+                        ? Color.theme.textPrimary   // Carbon #18181B — 활성
+                        : Color.theme.outline        // Zinc 300 #D4D4D8 — 비활성
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

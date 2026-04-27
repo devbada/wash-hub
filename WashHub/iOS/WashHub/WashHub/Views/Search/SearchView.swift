@@ -223,12 +223,17 @@ struct SearchView: View {
         }
     }
 
+    /// 차단 사용자 피드 필터링
+    private var filteredFeeds: [Feed] {
+        searchService.results.feeds.filter { !blockService.isBlocked($0.userId) }
+    }
+
     // MARK: - 전체 결과 (섹션별)
     private var allResultsSection: some View {
         VStack(spacing: 0) {
-            if !searchService.results.feeds.isEmpty {
-                sectionHeader(title: "피드", count: searchService.results.feeds.count, tab: .feed)
-                ForEach(searchService.results.feeds.prefix(3)) { feed in
+            if !filteredFeeds.isEmpty {
+                sectionHeader(title: "피드", count: filteredFeeds.count, tab: .feed)
+                ForEach(filteredFeeds.prefix(3)) { feed in
                     NavigationLink(destination: FeedDetailView(feedId: feed.id)) {
                         FeedSearchRow(feed: feed)
                     }
@@ -270,7 +275,7 @@ struct SearchView: View {
 
     // MARK: - 타입별 전체 결과
     private var feedResultsSection: some View {
-        ForEach(searchService.results.feeds) { feed in
+        ForEach(filteredFeeds) { feed in
             NavigationLink(destination: FeedDetailView(feedId: feed.id)) {
                 FeedSearchRow(feed: feed)
             }
@@ -367,8 +372,10 @@ struct SearchView: View {
 
     private func countForTab(_ tab: SearchResultType) -> Int {
         switch tab {
-        case .all: return searchService.results.totalCount
-        case .feed: return searchService.results.feeds.count
+        case .all:
+            return filteredFeeds.count + searchService.results.equipments.count
+                + searchService.results.carWashes.count + searchService.results.routines.count
+        case .feed: return filteredFeeds.count
         case .equipment: return searchService.results.equipments.count
         case .carWash: return searchService.results.carWashes.count
         case .routine: return searchService.results.routines.count

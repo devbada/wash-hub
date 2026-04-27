@@ -90,6 +90,7 @@ struct LoginView: View {
                     }
                     .padding(.top, 4)
                 }
+                .frame(maxWidth: 400)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 60)
             }

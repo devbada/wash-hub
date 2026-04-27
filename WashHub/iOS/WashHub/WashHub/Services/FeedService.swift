@@ -247,6 +247,9 @@ final class FeedService: ObservableObject {
                         "status": "ACTIVE"
                     ])
                     .execute()
+
+                // 세차 기록 생성 → 앱 아이콘 즉시 업데이트 (Stage 1: 깨끗한 상태)
+                await DynamicIconService.shared.updateIconIfNeeded()
             } catch {
                 // TODO-minam: wash_log 자동 생성 실패 시 로그 분석 필요
                 print("⚠️ wash_log 자동 생성 실패 (피드 자체는 정상): \(error)")

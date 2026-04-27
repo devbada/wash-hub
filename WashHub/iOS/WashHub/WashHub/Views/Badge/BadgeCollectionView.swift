@@ -35,18 +35,16 @@ struct BadgeCollectionView: View {
                     badge: badge,
                     isUnlocked: badgeService.isUnlocked(badgeId: badge.id),
                     unlockedAt: badgeService.myBadges.first(where: { $0.badgeId == badge.id })?.unlockedAt,
-                    currentTitleBadgeId: authManager.currentUser?.titleBadgeId,
                     onSetTitle: { badgeId in
-                        Task {
-                            if let userId = authManager.currentUser?.id {
-                                let success = await badgeService.setTitle(userId: userId, badgeId: badgeId)
-                                if success {
-                                    await authManager.loadProfile(userId: userId)
-                                }
-                            }
+                        guard let userId = authManager.currentUser?.id else { return false }
+                        let success = await badgeService.setTitle(userId: userId, badgeId: badgeId)
+                        if success {
+                            await authManager.loadProfile(userId: userId)
                         }
+                        return success
                     }
                 )
+                .environmentObject(authManager)
             }
         }
         .task {
@@ -170,11 +168,17 @@ struct BadgeGridItem: View {
 // MARK: - 뱃지 상세 시트
 struct BadgeDetailSheet: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authManager: AuthManager
     let badge: Badge
     let isUnlocked: Bool
     let unlockedAt: String?
-    let currentTitleBadgeId: String?
-    let onSetTitle: (String?) -> Void
+    let onSetTitle: (String?) async -> Bool
+    @State private var isSettingTitle = false
+
+    /// authManager에서 실시간으로 읽어 즉시 반영
+    private var isCurrentTitle: Bool {
+        authManager.currentUser?.titleBadgeId == badge.id
+    }
 
     var body: some View {
         NavigationView {
@@ -248,21 +252,38 @@ struct BadgeDetailSheet: View {
 
                     // 타이틀 설정 버튼
                     if isUnlocked {
-                        let isCurrentTitle = currentTitleBadgeId == badge.id
                         Button(action: {
-                            onSetTitle(isCurrentTitle ? nil : badge.id)
-                            dismiss()
+                            isSettingTitle = true
+                            Task {
+                                let success = await onSetTitle(isCurrentTitle ? nil : badge.id)
+                                isSettingTitle = false
+                                if success {
+                                    dismiss()
+                                }
+                            }
                         }) {
-                            Text(isCurrentTitle ? "타이틀 해제" : "대표 타이틀로 설정")
-                                .font(.appBodyMedium)
-                                .foregroundColor(isCurrentTitle ? .theme.textSecondary : .theme.onPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(isCurrentTitle ? Color.theme.surfaceHigh : Color.theme.primary)
-                                )
+                            if isSettingTitle {
+                                ProgressView()
+                                    .tint(isCurrentTitle ? .theme.textSecondary : .theme.onPrimary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(isCurrentTitle ? Color.theme.surfaceHigh : Color.theme.primary)
+                                    )
+                            } else {
+                                Text(isCurrentTitle ? "타이틀 해제" : "대표 타이틀로 설정")
+                                    .font(.appBodyMedium)
+                                    .foregroundColor(isCurrentTitle ? .theme.textSecondary : .theme.onPrimary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(isCurrentTitle ? Color.theme.surfaceHigh : Color.theme.primary)
+                                    )
+                            }
                         }
+                        .disabled(isSettingTitle)
                     } else {
                         Text("아직 획득하지 못한 뱃지입니다")
                             .font(.appCaption)

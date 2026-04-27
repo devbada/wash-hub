@@ -44,6 +44,10 @@ struct MyCarListView: View {
         .task { await loadCars() }
     }
 
+    @State private var editingCar: MyCar?
+    @State private var deletingCar: MyCar?
+    @State private var showDeleteConfirm = false
+
     private var carList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
@@ -52,9 +56,37 @@ struct MyCarListView: View {
                         MyCarCard(car: car)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            editingCar = car
+                        } label: {
+                            Label("수정", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            deletingCar = car
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("삭제", systemImage: "trash")
+                        }
+                    }
                 }
             }
             .padding(16)
+        }
+        .sheet(item: $editingCar) { car in
+            AddMyCarView(editCar: car) { await loadCars() }
+        }
+        .alert("차량 삭제", isPresented: $showDeleteConfirm) {
+            Button("취소", role: .cancel) { deletingCar = nil }
+            Button("삭제", role: .destructive) {
+                guard let car = deletingCar else { return }
+                Task {
+                    await deleteCar(car)
+                    deletingCar = nil
+                }
+            }
+        } message: {
+            Text("\(deletingCar?.carModel ?? "이 차량")을 삭제하시겠습니까?\n관련 세차 기록도 함께 삭제됩니다.")
         }
     }
 
@@ -71,6 +103,39 @@ struct MyCarListView: View {
                     .secondaryButtonStyle()
             }
             .padding(.horizontal, 60)
+        }
+    }
+
+    private func deleteCar(_ car: MyCar) async {
+        do {
+            // wash_log_equipments → wash_logs 순서로 삭제 (FK 의존성)
+            let persistLogs: [WashLog] = try await supabase
+                .from("wash_logs")
+                .select("id")
+                .eq("car_id", value: car.id)
+                .execute()
+                .value
+            if !persistLogs.isEmpty {
+                let logIds = persistLogs.map { $0.id }
+                try await supabase.from("wash_log_equipments").delete().in("wash_log_id", values: logIds).execute()
+                try await supabase.from("wash_logs").delete().eq("car_id", value: car.id).execute()
+            }
+
+            // feeds.car_id 참조 해제
+            try await supabase.from("feeds").update(["car_id": nil as String?]).eq("car_id", value: car.id).execute()
+
+            // Storage 이미지 삭제
+            if let imageUrl = car.imageUrl, imageUrl.contains("my-cars") {
+                let session = try await supabase.auth.session
+                let path = "\(session.user.id.uuidString)/\(car.id).jpg"
+                try? await supabase.storage.from("my-cars").remove(paths: [path])
+            }
+
+            // 차량 삭제
+            try await supabase.from("my_cars").delete().eq("id", value: car.id).execute()
+            await loadCars()
+        } catch {
+            print("Delete car error: \(error)")
         }
     }
 
@@ -146,7 +211,7 @@ struct MyCarCard: View {
     }
 }
 
-// MARK: - 차량 등록
+// MARK: - 차량 등록/수정
 struct AddMyCarView: View {
     @Environment(\.dismiss) var dismiss
     @State private var carModel = ""
@@ -156,7 +221,10 @@ struct AddMyCarView: View {
     @State private var isLoading = false
     @State private var carImage: UIImage?
     @State private var showImageSourcePicker = false
+    var editCar: MyCar? = nil
     var onComplete: () async -> Void
+
+    private var isEditMode: Bool { editCar != nil }
 
     var body: some View {
         NavigationView {
@@ -224,14 +292,14 @@ struct AddMyCarView: View {
                             .tint(.theme.secondary)
                             .padding(.horizontal, 4)
 
-                        Button(action: addCar) {
+                        Button(action: isEditMode ? updateCar : addCar) {
                             if isLoading {
                                 ProgressView()
                                     .tint(.black)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 16)
                             } else {
-                                Text("등록").primaryButtonStyle()
+                                Text(isEditMode ? "수정" : "등록").primaryButtonStyle()
                             }
                         }
                         .disabled(carModel.isEmpty || isLoading)
@@ -241,12 +309,20 @@ struct AddMyCarView: View {
                 }
                 .onTapGesture { hideKeyboard() }
             }
-            .navigationTitle("차량 등록")
+            .navigationTitle(isEditMode ? "차량 수정" : "차량 등록")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("취소") { dismiss() }
                         .foregroundColor(.theme.textSecondary)
+                }
+            }
+            .onAppear {
+                if let car = editCar {
+                    carModel = car.carModel
+                    carColor = car.carColor ?? ""
+                    carYear = car.carYear.map { "\($0)" } ?? ""
+                    isPrimary = car.isPrimary
                 }
             }
             .background(
@@ -265,6 +341,44 @@ struct AddMyCarView: View {
             #selector(UIResponder.resignFirstResponder),
             to: nil, from: nil, for: nil
         )
+    }
+
+    private func updateCar() {
+        guard let car = editCar else { return }
+        isLoading = true
+        Task {
+            do {
+                let session = try await supabase.auth.session
+                var imageUrl: String? = car.imageUrl
+
+                // 새 이미지가 선택된 경우 업로드
+                if let image = carImage,
+                   let imageData = image.jpegDataUnder(maxDimension: 1600, maxBytes: 2_500_000) {
+                    let path = "\(session.user.id.uuidString)/\(car.id).jpg"
+                    try await supabase.storage
+                        .from("my-cars")
+                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg", upsert: true))
+                    imageUrl = try supabase.storage
+                        .from("my-cars")
+                        .getPublicURL(path: path).absoluteString
+                }
+
+                var data: [String: String] = [
+                    "car_model": carModel,
+                    "is_primary": isPrimary ? "true" : "false"
+                ]
+                if !carColor.isEmpty { data["car_color"] = carColor }
+                if let year = Int(carYear) { data["car_year"] = "\(year)" }
+                if let imageUrl = imageUrl { data["image_url"] = imageUrl }
+
+                try await supabase.from("my_cars").update(data).eq("id", value: car.id).execute()
+                await onComplete()
+                dismiss()
+            } catch {
+                print("Update car error: \(error)")
+            }
+            isLoading = false
+        }
     }
 
     private func addCar() {

@@ -146,4 +146,6 @@ final class BlockService: ObservableObject {
 // MARK: - 차단 상태 변경 Notification
 extension Notification.Name {
     static let blockStatusChanged = Notification.Name("blockStatusChanged")
+    /// 사용자 차단 완료 — userInfo["blockedId"] 에 차단된 userId 포함
+    static let userBlocked = Notification.Name("userBlocked")
 }
