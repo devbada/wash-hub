@@ -84,7 +84,7 @@ struct EquipmentListView: View {
                         ScrollView {
                             LazyVStack(spacing: 12) {
                                 ForEach(filteredEquipments) { equipment in
-                                    NavigationLink(destination: EquipmentDetailView(equipment: equipment, onChanged: { await loadEquipments() })) {
+                                    NavigationLink(destination: EquipmentDetailView(equipment: equipment, onChanged: { await loadEquipments(forceRefresh: true) })) {
                                         EquipmentCard(equipment: equipment)
                                     }
                                     .buttonStyle(.plain)
@@ -122,7 +122,7 @@ struct EquipmentListView: View {
                 }
             }
             .sheet(isPresented: $showAddEquipment) {
-                AddEquipmentView { await loadEquipments() }
+                AddEquipmentView { await loadEquipments(forceRefresh: true) }
             }
             .sheet(isPresented: $showCarWashList) {
                 CarWashListView()
@@ -139,7 +139,14 @@ struct EquipmentListView: View {
         .task { await loadEquipments() }
     }
 
-    private func loadEquipments() async {
+    /// - Parameter forceRefresh: true면 캐시 무시 (사용자 추가/수정/삭제 후 호출)
+    private func loadEquipments(forceRefresh: Bool = false) async {
+        // 캐시 hit → 즉시 반환
+        if !forceRefresh, let cached = CatalogCache.equipmentList.value(for: CatalogCache.key) {
+            equipments = cached
+            isLoading = false
+            return
+        }
         do {
             let persistEquipments: [Equipment] = try await supabase
                 .from("equipments")
@@ -149,6 +156,7 @@ struct EquipmentListView: View {
                 .execute()
                 .value
             equipments = persistEquipments
+            CatalogCache.equipmentList.set(persistEquipments, for: CatalogCache.key)
         } catch {
             print("Equipments load error: \(error)")
         }
@@ -584,6 +592,8 @@ struct EquipmentDetailView: View {
                 .update(["status": "DELETED"])
                 .eq("id", value: equipment.id)
                 .execute()
+            // 카탈로그 캐시 무효화
+            CatalogCache.invalidateEquipmentList()
             await onChanged()
             dismiss()
         } catch {
@@ -1115,6 +1125,9 @@ struct EditEquipmentView: View {
                     .execute()
                     .value
 
+                // 카탈로그 캐시 무효화 — 다른 뷰에서도 최신 데이터로 재조회되도록
+                CatalogCache.invalidateEquipmentList()
+
                 if let updated = persistUpdated.first {
                     onUpdated(updated)
                 }
@@ -1308,6 +1321,8 @@ struct AddEquipmentView: View {
                 if let url = imageUrlString { data["image_url"] = url }
 
                 try await supabase.from("equipments").insert(data).execute()
+                // 카탈로그 캐시 무효화
+                CatalogCache.invalidateEquipmentList()
                 await onComplete()
                 dismiss()
             } catch {

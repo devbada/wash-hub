@@ -266,6 +266,8 @@ final class AuthManager: ObservableObject {
         isAuthenticated = false
         currentUser = nil
         needsNicknameSetup = false
+        // 다른 사용자가 로그인할 때 이전 사용자의 세차 기록이 캐시에서 보이지 않도록 무효화
+        await DynamicIconService.shared.invalidateWashLogCache()
     }
 
     // MARK: - 회원 탈퇴

@@ -12,16 +12,41 @@ final class WashIndexService: ObservableObject {
     /// 현재 날씨 데이터의 지역명 (예: "서울", "경기 김포", "대구")
     @Published var regionName: String = ""
 
+    // MARK: - 캐시 (3시간 TTL — 기상청도 단기예보를 3h 단위로 갱신)
+    // @StateObject 가 매 뷰마다 인스턴스를 만들기 때문에 static 으로 인스턴스 간 공유한다
+    private static let weatherCacheTTL: TimeInterval = 3 * 60 * 60
+    private static let washIndexCache = TimedCache<String, WashIndex>(ttl: weatherCacheTTL)
+    private static let forecastCache = TimedCache<String, [DailyForecast]>(ttl: weatherCacheTTL)
+
+    /// 캐시 키 — 기상청 격자(nx, ny) 기준
+    private static func cacheKey(nx: Int, ny: Int) -> String { "\(nx)-\(ny)" }
+
+    /// 강제 새로고침이 필요할 때 호출 (pull-to-refresh)
+    func invalidateWeatherCache() {
+        Self.washIndexCache.invalidateAll()
+        Self.forecastCache.invalidateAll()
+    }
+
     // MARK: - 세차지수 로드 (Supabase Edge Function 'weather-proxy' 호출)
     // 기상청 API Hub + 에어코리아 API 키는 Edge Function Secrets 에만 보관
     // iOS 앱에는 API 키가 포함되지 않음 (Secure Coding)
-    func loadWashIndex(latitude: Double = 37.5665, longitude: Double = 126.9780) async {
+    /// - Parameter forceRefresh: true면 캐시 무시하고 API 강제 호출
+    func loadWashIndex(latitude: Double = 37.5665, longitude: Double = 126.9780, forceRefresh: Bool = false) async {
+        let grid = convertToGrid(lat: latitude, lng: longitude)
+        let key = Self.cacheKey(nx: grid.x, ny: grid.y)
+        regionName = guessRegionLabel(lat: latitude, lng: longitude)
+
+        // 1) 캐시 hit → 즉시 반환 (네트워크 호출 skip)
+        if !forceRefresh, let cached = Self.washIndexCache.value(for: key) {
+            washIndex = cached
+            isLoading = false
+            return
+        }
+
         isLoading = true
 
         do {
-            let grid = convertToGrid(lat: latitude, lng: longitude)
             let sidoName = guesssSido(lat: latitude, lng: longitude)
-            regionName = guessRegionLabel(lat: latitude, lng: longitude)
 
             // Edge Function 호출 페이로드
             struct WeatherRequest: Encodable {
@@ -38,7 +63,7 @@ final class WashIndexService: ObservableObject {
                     options: .init(body: payload)
                 )
 
-            washIndex = WashIndex(
+            let loaded = WashIndex(
                 score: result.score,
                 message: result.message,
                 recommendation: result.recommendation,
@@ -49,9 +74,11 @@ final class WashIndexService: ObservableObject {
                     temperature: result.weather.temperature
                 )
             )
+            washIndex = loaded
+            Self.washIndexCache.set(loaded, for: key)
         } catch {
             print("WashIndex load error: \(error)")
-            // 에러 시 기본값
+            // 에러 시 기본값 (캐시에 저장하지 않음 — 다음 호출에 재시도)
             washIndex = WashIndex(
                 score: 50,
                 message: "날씨 정보를 가져올 수 없습니다",
@@ -69,15 +96,25 @@ final class WashIndexService: ObservableObject {
     }
 
     // MARK: - 7일 예보 로드
-    func loadForecast(latitude: Double = 37.5665, longitude: Double = 126.9780) async {
+    /// - Parameter forceRefresh: true면 캐시 무시하고 API 강제 호출
+    func loadForecast(latitude: Double = 37.5665, longitude: Double = 126.9780, forceRefresh: Bool = false) async {
+        let grid = convertToGrid(lat: latitude, lng: longitude)
+        let key = Self.cacheKey(nx: grid.x, ny: grid.y)
+        if regionName.isEmpty {
+            regionName = guessRegionLabel(lat: latitude, lng: longitude)
+        }
+
+        // 1) 캐시 hit → 즉시 반환
+        if !forceRefresh, let cached = Self.forecastCache.value(for: key) {
+            forecast = cached
+            isForecastLoading = false
+            return
+        }
+
         isForecastLoading = true
 
         do {
-            let grid = convertToGrid(lat: latitude, lng: longitude)
             let sidoName = guesssSido(lat: latitude, lng: longitude)
-            if regionName.isEmpty {
-                regionName = guessRegionLabel(lat: latitude, lng: longitude)
-            }
 
             struct ForecastRequest: Encodable {
                 let nx: Int
@@ -94,9 +131,11 @@ final class WashIndexService: ObservableObject {
                 )
 
             forecast = result.forecasts
+            Self.forecastCache.set(result.forecasts, for: key)
         } catch {
             print("Forecast load error: \(error)")
             forecast = []
+            // 에러 시 캐시에 저장하지 않음
         }
 
         isForecastLoading = false

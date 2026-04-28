@@ -130,7 +130,7 @@ struct CarWashListView: View {
                         ScrollView {
                             LazyVStack(spacing: 12) {
                                 ForEach(filteredCarWashes) { carWash in
-                                    NavigationLink(destination: CarWashDetailView(carWash: carWash, onChanged: { await loadCarWashes() })) {
+                                    NavigationLink(destination: CarWashDetailView(carWash: carWash, onChanged: { await loadCarWashes(forceRefresh: true) })) {
                                         CarWashCard(carWash: carWash)
                                     }
                                     .buttonStyle(.plain)
@@ -162,7 +162,7 @@ struct CarWashListView: View {
                 }
             }
             .sheet(isPresented: $showAddCarWash) {
-                AddCarWashView { await loadCarWashes() }
+                AddCarWashView { await loadCarWashes(forceRefresh: true) }
             }
             .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
                 Button("로그인하기") { authManager.exitGuestMode() }
@@ -174,13 +174,19 @@ struct CarWashListView: View {
         .task { await loadCarWashes() }
         .onChange(of: showMapView) { _, isMap in
             if !isMap {
-                // 지도 → 목록 전환 시 즐겨찾기된 세차장 즉시 반영
-                Task { await loadCarWashes() }
+                // 지도 → 목록 전환 시 즐겨찾기된 세차장 즉시 반영 (캐시 무시)
+                Task { await loadCarWashes(forceRefresh: true) }
             }
         }
     }
 
-    private func loadCarWashes() async {
+    /// - Parameter forceRefresh: true면 캐시 무시 (사용자 추가/수정/삭제 후 호출)
+    private func loadCarWashes(forceRefresh: Bool = false) async {
+        // 캐시 hit → 즉시 반환
+        if !forceRefresh, let cached = CatalogCache.carWashList.value(for: CatalogCache.key) {
+            carWashes = cached
+            return
+        }
         do {
             let persistCarWashes: [CarWash] = try await supabase
                 .from("car_washes")
@@ -190,6 +196,7 @@ struct CarWashListView: View {
                 .execute()
                 .value
             carWashes = persistCarWashes
+            CatalogCache.carWashList.set(persistCarWashes, for: CatalogCache.key)
         } catch {
             print("Car washes load error: \(error)")
         }
@@ -499,6 +506,8 @@ struct CarWashDetailView: View {
                 .update(["status": "DELETED"])
                 .eq("id", value: carWash.id)
                 .execute()
+            // 카탈로그 캐시 무효화
+            CatalogCache.invalidateCarWashList()
             await onChanged()
             dismiss()
         } catch {
@@ -1089,6 +1098,9 @@ struct EditCarWashView: View {
                     .execute()
                     .value
 
+                // 카탈로그 캐시 무효화
+                CatalogCache.invalidateCarWashList()
+
                 if let updated = persistUpdated.first {
                     onUpdated(updated)
                 }
@@ -1268,6 +1280,8 @@ struct AddCarWashView: View {
                 }
 
                 try await supabase.from("car_washes").insert(data).execute()
+                // 카탈로그 캐시 무효화
+                CatalogCache.invalidateCarWashList()
                 await onComplete()
                 dismiss()
             } catch {

@@ -12,12 +12,35 @@ final class FeedService: ObservableObject {
 
     private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year)"
 
+    // MARK: - 캐시 (첫 페이지만 60초 — pagination 결과는 캐싱 안 함)
+    // @StateObject 가 매 뷰마다 인스턴스를 만들기 때문에 static 으로 인스턴스 간 공유한다
+    private static let firstPageCacheTTL: TimeInterval = 60
+    private static let firstPageCache = TimedCache<String, [Feed]>(ttl: firstPageCacheTTL)
+    private static let firstPageCacheKey = "feeds.firstPage"
+
+    /// 피드 mutation(작성/삭제/수정 등) 시 호출 — 다음 fetch 때 신선한 데이터로 갱신
+    static func invalidateFeedListCache() {
+        firstPageCache.invalidateAll()
+    }
+
     // MARK: - 피드 목록 조회
+    /// - Parameters:
+    ///   - offset: 시작 인덱스 (0 = 첫 페이지)
+    ///   - forceRefresh: true면 캐시 무시 (pull-to-refresh 등 사용자 명시적 새로고침)
     func loadFeeds(offset: Int = 0, forceRefresh: Bool = false) async {
         // 이미 로딩 중이면 중복 호출 방지 (forceRefresh 제외)
         if isLoading && !forceRefresh { return }
         // 추가 페이지 요청인데 더 이상 페이지가 없으면 무시
         if offset > 0 && !hasMorePages { return }
+
+        // 첫 페이지(offset=0) + 강제새로고침 아닐 때만 캐시 시도
+        if offset == 0 && !forceRefresh,
+           let cached = Self.firstPageCache.value(for: Self.firstPageCacheKey) {
+            feeds = cached
+            hasMorePages = cached.count >= pageSize
+            isLoading = false
+            return
+        }
 
         isLoading = true
         do {
@@ -45,6 +68,8 @@ final class FeedService: ObservableObject {
             if offset == 0 {
                 feeds = persistFeeds
                 hasMorePages = persistFeeds.count >= pageSize
+                // 첫 페이지만 캐싱
+                Self.firstPageCache.set(persistFeeds, for: Self.firstPageCacheKey)
             } else {
                 // 중복 피드 방지: 이미 존재하는 ID 제외
                 let existingIds = Set(feeds.map { $0.id })
@@ -231,8 +256,9 @@ final class FeedService: ObservableObject {
         // 6. 차량이 선택된 경우 wash_logs 에 세차기록 자동 생성
         if let carId = carId {
             do {
+                let now = Date()
                 let today = ISO8601DateFormatter.string(
-                    from: Date(),
+                    from: now,
                     timeZone: TimeZone(identifier: "Asia/Seoul") ?? .current,
                     formatOptions: [.withFullDate, .withDashSeparatorInDate]
                 )
@@ -248,7 +274,9 @@ final class FeedService: ObservableObject {
                     ])
                     .execute()
 
-                // 세차 기록 생성 → 앱 아이콘 즉시 업데이트 (Stage 1: 깨끗한 상태)
+                // 캐시를 새 세차일로 즉시 갱신 → updateIconIfNeeded()는 DB 재조회 없이 바로 반영
+                await DynamicIconService.shared.recordWashDate(now, userId: session.user.id.uuidString)
+                // 세차 기록 생성 → 앱 아이콘 즉시 업데이트 (Just Washed: 깨끗한 상태)
                 await DynamicIconService.shared.updateIconIfNeeded()
             } catch {
                 // TODO-minam: wash_log 자동 생성 실패 시 로그 분석 필요
@@ -256,6 +284,8 @@ final class FeedService: ObservableObject {
             }
         }
 
+        // 새 피드가 추가됐으니 첫 페이지 캐시 무효화
+        Self.invalidateFeedListCache()
         return feedId
     }
 
@@ -287,6 +317,9 @@ final class FeedService: ObservableObject {
             .update(payload)
             .eq("id", value: id)
             .execute()
+
+        // 피드 내용 변경 → 캐시 무효화
+        Self.invalidateFeedListCache()
     }
 
     // MARK: - 피드 삭제 (소프트 삭제)
@@ -304,12 +337,16 @@ final class FeedService: ObservableObject {
                 .update(["status": "DELETED"])
                 .eq("feed_id", value: id)
                 .execute()
+            // 마지막 세차 기록이 영향받을 수 있으므로 아이콘 캐시도 무효화
+            await DynamicIconService.shared.invalidateWashLogCache()
         } catch {
             // TODO-minam: 피드 삭제는 성공했으나 wash_log 삭제 실패 시 로그 분석
             print("⚠️ wash_log 연동 삭제 실패: \(error)")
         }
 
         feeds.removeAll { $0.id == id }
+        // 피드 삭제 → 다른 인스턴스를 위해서도 캐시 무효화
+        Self.invalidateFeedListCache()
     }
 
     // MARK: - 좋아요 토글

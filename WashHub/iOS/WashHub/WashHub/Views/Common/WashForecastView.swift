@@ -231,7 +231,8 @@ struct WashForecastView: View {
                 .font(.appCaption)
                 .foregroundColor(.theme.textDisabled)
             Button("다시 시도") {
-                Task { await washIndexService.loadForecast() }
+                // 사용자 명시적 재시도 — 캐시 무시
+                Task { await washIndexService.loadForecast(forceRefresh: true) }
             }
             .font(.appCaptionBold)
             .foregroundColor(.theme.secondary)

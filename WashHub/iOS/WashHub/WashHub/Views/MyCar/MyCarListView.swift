@@ -133,6 +133,9 @@ struct MyCarListView: View {
 
             // 차량 삭제
             try await supabase.from("my_cars").delete().eq("id", value: car.id).execute()
+            // wash_log가 함께 삭제되었으므로 아이콘 캐시도 무효화 → 다음 업데이트 시 재조회
+            await DynamicIconService.shared.invalidateWashLogCache()
+            await DynamicIconService.shared.updateIconIfNeeded()
             await loadCars()
         } catch {
             print("Delete car error: \(error)")
