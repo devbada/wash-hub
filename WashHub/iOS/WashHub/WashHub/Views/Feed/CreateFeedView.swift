@@ -5,7 +5,16 @@ struct CreateFeedView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var feedService = FeedService()
-    @State private var title = ""
+
+    /// 본문 사전 채움 — 루틴 따라하기 완료 후 진입 시 자동으로 본문 채워둠
+    var prefilledContent: String? = nil
+    /// 추천 해시태그 사전 추가 — 루틴 이름 등 외부 컨텍스트에서 주입
+    var prefilledHashtags: [String] = []
+    /// "방금 찍은 사진은 앨범에 있어요" 같은 안내 문구 표시 여부
+    var showPhotoFromAlbumHint: Bool = false
+    /// 피드 작성 성공 후 호출되는 콜백 — 작성된 feed.id 를 받아 외부에서 후처리 가능 (예: routine_executions.feed_id 업데이트)
+    var onFeedCreated: ((String) -> Void)? = nil
+
     @State private var content = ""
     @State private var location = ""
     @State private var washMethod = ""
@@ -28,13 +37,38 @@ struct CreateFeedView: View {
     @State private var activePickerType: ImagePickerType?
     @State private var showImageSourcePicker = false
 
+    // 리스트 카드 썸네일 소스 — 사용자가 Before / After 중 어느 것을 카드 노출용으로 쓸지 선택
+    @State private var thumbnailSource: ThumbnailSource = .after
+
+    // 해시태그 — 추천 + 사용자 선택. 본문/차량/세차방식 변경 시 추천 자동 갱신
+    @State private var suggestedHashtags: [String] = []
+    @State private var selectedHashtags: Set<String> = []
+    // 사용자가 직접 입력한 커스텀 해시태그 (추천에 없는 것)
+    @State private var customHashtags: [String] = []
+    // 항상 보이는 입력 TextField 의 텍스트
+    @State private var customTagInput: String = ""
+    // 본문 입력 debounce — 타이핑 중 매 키스트로크마다 chip 재계산하면 SwiftUI re-render 비용으로 입력 끊김
+    @State private var hashtagDebounceTask: Task<Void, Never>?
+
     enum ImagePickerType: Identifiable {
         case before, after, extra
         var id: String { "\(self)" }
     }
 
+    /// 리스트 썸네일로 사용할 사진의 종류 (Before / After)
+    enum ThumbnailSource: String, CaseIterable, Identifiable {
+        case before, after
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .before: return "Before"
+            case .after:  return "After"
+            }
+        }
+    }
+
     private var canSubmit: Bool {
-        !title.isEmpty && !beforeImages.isEmpty && !afterImages.isEmpty && !isLoading
+        !beforeImages.isEmpty && !afterImages.isEmpty && !isLoading
     }
 
     var body: some View {
@@ -45,15 +79,6 @@ struct CreateFeedView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // 제목
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("제목")
-                                .font(.appLabel)
-                                .foregroundColor(.theme.textSecondary)
-                            TextField("세차 제목을 입력하세요", text: $title)
-                                .washHubTextField()
-                        }
-
                         // 내용
                         VStack(alignment: .leading, spacing: 8) {
                             Text("내용")
@@ -74,6 +99,9 @@ struct CreateFeedView: View {
                                     UITextView.appearance().backgroundColor = .clear
                                 }
                         }
+
+                        // 추천 해시태그 — 본문/차량/세차방식에서 자동 추출, 탭하여 선택/해제 + 직접 추가
+                        hashtagSuggestionSection
 
                         // 장소
                         VStack(alignment: .leading, spacing: 8) {
@@ -162,22 +190,52 @@ struct CreateFeedView: View {
                             }
                         }
 
-                        // Before / After 사진 (같은 행)
+                        // Before / After 사진 — 각각 1장만 (썸네일 선택 일관성)
                         HStack(alignment: .top, spacing: 12) {
                             compactImageSection(
                                 title: "Before",
                                 images: $beforeImages,
-                                maxCount: 5,
+                                maxCount: 1,
                                 onAdd: { hideKeyboard(); activePickerType = .before }
                             )
 
                             compactImageSection(
                                 title: "After",
                                 images: $afterImages,
-                                maxCount: 5,
+                                maxCount: 1,
                                 onAdd: { hideKeyboard(); activePickerType = .after }
                             )
                         }
+
+                        // 사진 앨범 안내 — 외부에서 사진 찍어둔 경우 (루틴 따라하기 후 등)
+                        // Before/After 영역 바로 아래에 작게 표시 — 사용자가 + 버튼 보고 망설일 때 도움
+                        if showPhotoFromAlbumHint {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.theme.secondary)
+                                    .padding(.top, 1)
+                                Text("방금 촬영한 사진은 사진 앨범에 있어요. + 버튼으로 선택해주세요.")
+                                    .font(.appSmall)
+                                    .foregroundColor(.theme.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        // 비율 안내 — 같은 비율(가로/세로 일치)이면 슬라이더 비교가 더 깔끔
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 11))
+                                .foregroundColor(.theme.textDisabled)
+                                .padding(.top, 1)
+                            Text("같은 비율의 사진을 올리면 Before/After 비교가 더 자연스러워요")
+                                .font(.appSmall)
+                                .foregroundColor(.theme.textDisabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        // 리스트 썸네일 소스 선택 — Before/After 중 어떤 사진을 카드에 노출할지
+                        thumbnailSourcePicker
 
                         // 추가 사진 (선택)
                         wideImageSection(
@@ -271,12 +329,19 @@ struct CreateFeedView: View {
             }
             .task {
                 await loadMyCars()
+                applyPrefillIfNeeded()
+                refreshHashtagSuggestions()
             }
             .onChange(of: activePickerType) { newValue in
                 if newValue != nil {
                     showImageSourcePicker = true
                 }
             }
+            // 본문/세차방식 — 타이핑 중 키스트로크마다 호출되므로 디바운스(400ms)로 입력 끊김 방지
+            .onChange(of: content) { _ in scheduleHashtagRefresh() }
+            .onChange(of: washMethod) { _ in scheduleHashtagRefresh() }
+            // 차량 선택은 탭 한 번에 끝나므로 즉시 갱신해도 부담 없음
+            .onChange(of: selectedCarId) { _ in refreshHashtagSuggestions() }
             .background(
                 ImageSourcePicker(
                     isPresented: $showImageSourcePicker,
@@ -284,9 +349,10 @@ struct CreateFeedView: View {
                         guard let type = activePickerType else { return }
                         switch type {
                         case .before:
-                            if beforeImages.count < 5 { beforeImages.append(image) }
+                            // Before/After 는 1장 제한 — 옵션 B(명시적 삭제 후 추가)
+                            if beforeImages.isEmpty { beforeImages.append(image) }
                         case .after:
-                            if afterImages.count < 5 { afterImages.append(image) }
+                            if afterImages.isEmpty { afterImages.append(image) }
                         case .extra:
                             if extraImages.count < 10 { extraImages.append(image) }
                         }
@@ -418,6 +484,170 @@ struct CreateFeedView: View {
         }
     }
 
+    // MARK: - 추천 해시태그 chip (Carbon&Citrus 토큰 — 선택 시 primary 액센트)
+    /// 표시되는 모든 태그 = 추천 태그 ∪ 커스텀 태그 (순서: 추천 먼저, 커스텀 뒤)
+    private var allDisplayTags: [String] {
+        suggestedHashtags + customHashtags.filter { !suggestedHashtags.contains($0) }
+    }
+
+    private var hashtagSuggestionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: "number")
+                    .font(.system(size: 12))
+                    .foregroundColor(.theme.textSecondary)
+                Text("해시태그")
+                    .font(.appLabel)
+                    .foregroundColor(.theme.textSecondary)
+                Spacer()
+                Text(allDisplayTags.isEmpty ? "본문 입력 시 자동 추천" : "탭하여 선택/해제")
+                    .font(.appSmall)
+                    .foregroundColor(.theme.textDisabled)
+            }
+
+            // chip + 직접 추가 — 가로 스크롤
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(allDisplayTags, id: \.self) { tag in
+                        let isOn = selectedHashtags.contains(tag)
+                        Button(action: {
+                            hideKeyboard()
+                            if isOn {
+                                selectedHashtags.remove(tag)
+                            } else {
+                                selectedHashtags.insert(tag)
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Text(tag)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(isOn ? .white : .theme.textSecondary)
+                                // 커스텀 태그는 X 버튼으로 영구 삭제 가능
+                                if customHashtags.contains(tag) {
+                                    Button(action: { removeCustomTag(tag) }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(isOn ? .white.opacity(0.7) : .theme.textDisabled)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(isOn ? Color.theme.primary : Color.theme.surfaceHigh)
+                            .cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // 항상 보이는 입력 TextField — chip 처럼 보이지만 즉시 입력 가능
+                    HStack(spacing: 3) {
+                        Image(systemName: "number")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.theme.textDisabled)
+                        TextField("태그 추가", text: $customTagInput)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.theme.textPrimary)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .submitLabel(.done)
+                            .onSubmit { commitCustomTag() }
+                            .frame(minWidth: 70)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.theme.outline.opacity(0.4), lineWidth: 1)
+                    )
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    // MARK: - 외부 사전 채움 적용 (루틴 따라하기 완료 후 진입 등)
+    /// task 시점에 한 번 호출. content 가 비어있을 때만 prefilled 적용 (덮어쓰기 방지)
+    private func applyPrefillIfNeeded() {
+        if content.isEmpty, let prefill = prefilledContent, !prefill.isEmpty {
+            content = prefill
+        }
+        // 추천 해시태그에 외부 컨텍스트 힌트 추가 (루틴 이름 등)
+        for tag in prefilledHashtags where !customHashtags.contains(tag) && !suggestedHashtags.contains(tag) {
+            customHashtags.append(tag)
+            selectedHashtags.insert(tag)
+        }
+    }
+
+    // MARK: - 디바운스 스케줄러 — 타이핑 멈춘 후 400ms 뒤에 추천 갱신
+    /// 매 키스트로크마다 호출되어도 안전 — 마지막 호출 후 400ms 가 지나야 실제 갱신 발생
+    private func scheduleHashtagRefresh() {
+        hashtagDebounceTask?.cancel()
+        hashtagDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            refreshHashtagSuggestions()
+        }
+    }
+
+    // MARK: - 추천 해시태그 갱신 — 본문/차량/세차방식이 바뀔 때마다 호출
+    private func refreshHashtagSuggestions() {
+        let car = myCars.first(where: { $0.id == selectedCarId }).map { car -> FeedCar in
+            FeedCar(id: car.id, carModel: car.carModel, carColor: car.carColor, carYear: car.carYear, nickname: car.nickname)
+        }
+        let new = HashtagGenerator.generate(
+            content: content.isEmpty ? nil : content,
+            washMethod: washMethod.isEmpty ? nil : washMethod,
+            car: car
+        )
+        // 새로 추가된 추천은 기본 선택, 사라진 추천은 selectedHashtags에서 제거 (커스텀은 유지)
+        let newSet = Set(new)
+        let customSet = Set(customHashtags)
+        selectedHashtags = selectedHashtags.intersection(newSet.union(customSet))
+        for tag in new where !selectedHashtags.contains(tag) {
+            selectedHashtags.insert(tag)
+        }
+        suggestedHashtags = new
+    }
+
+    // MARK: - 직접 추가 처리
+    private func commitCustomTag() {
+        defer { customTagInput = "" }
+        let trimmed = customTagInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        // 자동으로 # 접두사 보정 + 공백/특수문자 제거
+        let normalized = "#" + trimmed
+            .replacingOccurrences(of: "#", with: "")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .joined()
+        guard normalized.count >= 2, normalized.count <= 30 else { return }
+        if !customHashtags.contains(normalized) && !suggestedHashtags.contains(normalized) {
+            customHashtags.append(normalized)
+        }
+        selectedHashtags.insert(normalized)
+    }
+
+    private func removeCustomTag(_ tag: String) {
+        customHashtags.removeAll { $0 == tag }
+        selectedHashtags.remove(tag)
+    }
+
+    // MARK: - 썸네일 소스 선택 (Before / After 중 리스트 카드에 노출할 사진)
+    private var thumbnailSourcePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("리스트 썸네일로 사용")
+                .font(.appLabel)
+                .foregroundColor(.theme.textSecondary)
+
+            Picker("리스트 썸네일", selection: $thumbnailSource) {
+                ForEach(ThumbnailSource.allCases) { source in
+                    Text(source.label).tag(source)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
     // MARK: - 내차 목록 로드
     private func loadMyCars() async {
         do {
@@ -457,24 +687,37 @@ struct CreateFeedView: View {
         Task {
             do {
                 // 피드 사진은 Before/After 비교용이라 해상도를 상대적으로 높게 유지 (긴 변 1920px, 3MB)
-                let beforeData = beforeImages.compactMap { $0.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) }
-                let afterData = afterImages.compactMap { $0.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) }
-                let extraData = extraImages.compactMap { $0.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) }
+                // 원본 UIImage 사이즈를 함께 보존 → 상세 화면 컨테이너 비율 동적 결정에 활용
+                let beforeUploads = beforeImages.compactMap { img -> FeedService.UploadImage? in
+                    guard let data = img.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) else { return nil }
+                    return FeedService.UploadImage(data: data, width: Int(img.size.width), height: Int(img.size.height))
+                }
+                let afterUploads = afterImages.compactMap { img -> FeedService.UploadImage? in
+                    guard let data = img.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) else { return nil }
+                    return FeedService.UploadImage(data: data, width: Int(img.size.width), height: Int(img.size.height))
+                }
+                let extraUploads = extraImages.compactMap { img -> FeedService.UploadImage? in
+                    guard let data = img.jpegDataUnder(maxDimension: 1920, maxBytes: 3 * 1024 * 1024) else { return nil }
+                    return FeedService.UploadImage(data: data, width: Int(img.size.width), height: Int(img.size.height))
+                }
 
-                _ = try await feedService.createFeed(
-                    title: title.isEmpty ? nil : title,
+                let createdFeedId = try await feedService.createFeed(
                     content: content.isEmpty ? nil : content,
                     location: location.isEmpty ? nil : location,
                     washMethod: washMethod.isEmpty ? nil : washMethod,
                     carId: selectedCarId,
-                    beforeImages: beforeData,
-                    afterImages: afterData,
-                    extraImages: extraData,
+                    beforeImages: beforeUploads,
+                    afterImages: afterUploads,
+                    extraImages: extraUploads,
+                    thumbnailFromBefore: thumbnailSource == .before,
+                    hashtags: Array(selectedHashtags),
                     isSponsored: isSponsored,
                     sponsorName: isSponsored && !sponsorName.isEmpty ? sponsorName : nil
                 )
 
                 NotificationCenter.default.post(name: .feedCreated, object: nil)
+                // 외부에서 후처리 필요 시 호출 (예: routine_executions.feed_id 업데이트)
+                onFeedCreated?(createdFeedId)
                 showSuccess = true
             } catch {
                 errorMessage = "피드 작성에 실패했습니다: \(error.localizedDescription)"

@@ -7,10 +7,20 @@ struct FollowRoutineView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var executionService = RoutineExecutionService()
     @State private var isStarted = false
-    @State private var showCompleteAlert = false
     @State private var showAbandonAlert = false
     @State private var elapsedSeconds = 0
     @State private var timer: Timer?
+
+    // 사진 캡처 + 공유 흐름 (루틴 강화 — Photos 앨범 저장 기반)
+    @State private var showBeforeCaptureSheet = false
+    @State private var showAfterCaptureSheet = false
+    @State private var showShareDecisionSheet = false
+    @State private var showCreateFeedSheet = false
+    @State private var photoPickerActive = false  // 카메라 picker 활성화 트리거
+    @State private var capturePhase: CapturePhase = .before
+    @State private var pendingCaptureImage: UIImage?  // 임시 — 앨범 저장 직전
+
+    enum CapturePhase { case before, after }
 
     private var sortedSteps: [RoutineStep] {
         (routine.routineSteps ?? []).sorted { $0.stepOrder < $1.stepOrder }
@@ -85,14 +95,76 @@ struct FollowRoutineView: View {
                         .shadow(color: Color.theme.primary.opacity(0.4), radius: 5)
                 }
             }
-            .alert("세차 완료!", isPresented: $showCompleteAlert) {
-                Button("확인") {
+            // ① 시작 직전: Before 사진 찍기 권유
+            .confirmationDialog("시작 사진을 찍어볼까요?", isPresented: $showBeforeCaptureSheet, titleVisibility: .visible) {
+                Button("사진 찍기") {
+                    capturePhase = .before
+                    photoPickerActive = true
+                }
+                Button("건너뛰기", role: .cancel) {
+                    Task { await startNewExecution() }
+                }
+            } message: {
+                Text("나중에 피드로 공유할 때 빠르게 사용할 수 있어요. 사진은 사진 앨범에 저장됩니다.")
+            }
+            // ② 완료 직후: After 사진 찍기 권유
+            .confirmationDialog("완료 사진도 남겨볼까요?", isPresented: $showAfterCaptureSheet, titleVisibility: .visible) {
+                Button("사진 찍기") {
+                    capturePhase = .after
+                    photoPickerActive = true
+                }
+                Button("건너뛰기", role: .cancel) {
+                    showShareDecisionSheet = true
+                }
+            } message: {
+                Text("Before/After 비교 사진이 있으면 더 멋진 피드가 됩니다.")
+            }
+            // ③ 피드 공유 의사
+            .confirmationDialog("이 결과를 피드로 공유할까요?", isPresented: $showShareDecisionSheet, titleVisibility: .visible) {
+                Button("피드 작성하기") {
+                    showCreateFeedSheet = true
+                }
+                Button("그냥 마치기", role: .cancel) {
                     stopTimer()
                     dismiss()
                 }
             } message: {
-                let minutes = elapsedSeconds / 60
-                Text("수고하셨습니다! 총 \(minutes)분 소요되었습니다.")
+                let minutes = max(1, elapsedSeconds / 60)
+                Text("\(minutes)분 동안 \(totalCount)단계를 완료하셨어요. 수고하셨어요!")
+            }
+            // ④ 카메라 — "사진 찍기" 탭 시 즉시 카메라 실행 (소스 선택 단계 없음)
+            .fullScreenCover(isPresented: $photoPickerActive) {
+                ImagePicker(sourceType: .camera) { image in
+                    Task {
+                        _ = await RoutineExecutionService.savePhotoToAlbum(image)
+                        await MainActor.run {
+                            // 카메라 dismiss 후 다음 흐름으로 분기
+                            if capturePhase == .before {
+                                Task { await startNewExecution() }
+                            } else {
+                                showShareDecisionSheet = true
+                            }
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            // ⑤ 피드 작성 시트 — prefilled 본문/태그 + onFeedCreated 콜백으로 routine_executions.feed_id 링크
+            .sheet(isPresented: $showCreateFeedSheet, onDismiss: {
+                stopTimer()
+                dismiss()
+            }) {
+                CreateFeedView(
+                    prefilledContent: feedPrefillContent(),
+                    prefilledHashtags: feedPrefillHashtags(),
+                    showPhotoFromAlbumHint: true,
+                    onFeedCreated: { feedId in
+                        Task {
+                            await executionService.linkFeed(feedId: feedId)
+                        }
+                    }
+                )
+                .environmentObject(authManager)
             }
             .alert("중단하시겠습니까?", isPresented: $showAbandonAlert) {
                 Button("계속하기", role: .cancel) {}
@@ -162,8 +234,9 @@ struct FollowRoutineView: View {
             guard let execStep = execStep else { return }
             Task {
                 await executionService.toggleStep(executionStepId: execStep.id)
+                // 모든 단계가 완료되었으면 자동으로 완료 흐름 진입
                 if executionService.isCompleted {
-                    showCompleteAlert = true
+                    await finalizeRoutine()
                 }
             }
         }) {
@@ -247,12 +320,9 @@ struct FollowRoutineView: View {
             }
 
             if allStepsCompleted {
-                // 모든 스텝 완료 → "완료하기" 버튼
+                // 모든 스텝 완료 → "완료하기" 버튼 → After 사진/공유 흐름 진입
                 Button(action: {
-                    Task {
-                        await executionService.completeExecution()
-                        showCompleteAlert = true
-                    }
+                    Task { await finalizeRoutine() }
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
@@ -324,9 +394,9 @@ struct FollowRoutineView: View {
 
         await executionService.toggleStep(executionStepId: execStep.id)
 
-        // 전체 완료 시 자동 완료 알림
+        // 모든 단계 완료 시 자동으로 완료 흐름 진입 (After 사진 → 공유)
         if executionService.isCompleted {
-            showCompleteAlert = true
+            await finalizeRoutine()
         }
     }
 
@@ -340,9 +410,9 @@ struct FollowRoutineView: View {
     }
 
     private func startOrRestore() async {
+        // 진행 중이던 실행 복원 → 그대로 이어가기 (Before 사진 안 묻음)
         if let _ = await executionService.restoreInProgress(routineId: routine.id) {
             isStarted = true
-            // 진행 중이던 실행을 복원한 경우: started_at 부터 현재까지의 경과 시간 반영
             if let startedAtString = executionService.currentExecution?.startedAt,
                let startedDate = parseISO8601(startedAtString) {
                 let elapsed = max(0, Int(Date().timeIntervalSince(startedDate)))
@@ -352,6 +422,12 @@ struct FollowRoutineView: View {
             return
         }
 
+        // 신규 시작 → 먼저 Before 사진 권유
+        showBeforeCaptureSheet = true
+    }
+
+    /// Before 사진 단계가 끝난 후 실제 실행 시작 (또는 사용자가 Skip 선택 시)
+    private func startNewExecution() async {
         do {
             _ = try await executionService.startExecution(
                 routineId: routine.id,
@@ -362,6 +438,37 @@ struct FollowRoutineView: View {
         } catch {
             print("Start execution error: \(error)")
         }
+    }
+
+    /// 모든 단계 완료 후: duration 저장 → After 사진 권유 → 공유 시트
+    private func finalizeRoutine() async {
+        // duration_seconds 와 함께 완료 처리 (이미 완료 상태면 service guard 로 noop)
+        await executionService.completeExecution(durationSeconds: elapsedSeconds)
+        stopTimer()
+        // After 사진 권유 시트 노출 → 답변에 따라 공유 시트로 이어짐
+        showAfterCaptureSheet = true
+    }
+
+    // MARK: - 피드 사전 채움 텍스트/태그 생성
+    /// 본문 — 루틴 제목 + 소요시간 + 단계수 + 작성자 크레딧
+    private func feedPrefillContent() -> String {
+        let minutes = max(1, elapsedSeconds / 60)
+        let stepCount = totalCount
+        let authorName = routine.profiles?.displayName ?? "익명"
+        return """
+        '\(routine.title)' 따라했어요!
+        \(minutes)분 동안 \(stepCount)단계 진행했어요.
+
+        작성자: \(authorName)
+        """
+    }
+
+    /// 추천 해시태그 — 루틴 이름 + 일반 #루틴따라하기
+    private func feedPrefillHashtags() -> [String] {
+        let normalized = routine.title.components(separatedBy: .whitespacesAndNewlines).joined()
+        var tags: [String] = ["#루틴따라하기"]
+        if !normalized.isEmpty { tags.insert("#\(normalized)", at: 0) }
+        return tags
     }
 
     /// Supabase 에서 넘어오는 ISO8601 문자열 파싱 (fractional seconds 포함/미포함 모두 지원)

@@ -355,16 +355,16 @@ struct UserFeedRow: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(feed.title ?? "피드")
-                    .font(.appBodyMedium)
-                    .foregroundColor(.theme.textPrimary)
-                    .lineLimit(1)
-
+                // 본문 발췌 (제목은 deprecated — 본문이 메인 텍스트)
                 if let content = feed.content, !content.isEmpty {
                     Text(content)
-                        .font(.appSmall)
-                        .foregroundColor(.theme.textSecondary)
+                        .font(.appBodyMedium)
+                        .foregroundColor(.theme.textPrimary)
                         .lineLimit(2)
+                } else {
+                    Text("세차 피드")
+                        .font(.appBodyMedium)
+                        .foregroundColor(.theme.textDisabled)
                 }
 
                 Text(String(feed.createdAt.prefix(10)))

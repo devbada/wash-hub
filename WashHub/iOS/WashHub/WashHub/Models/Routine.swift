@@ -9,6 +9,8 @@ struct Routine: Identifiable, Codable {
     let difficulty: Int?
     let likeCount: Int
     let forkCount: Int
+    /// 이 루틴을 따라하기 완료한 횟수 (DB trigger 로 자동 증가)
+    let usageCount: Int
     let status: String
     let createdAt: String
     let updatedAt: String
@@ -24,6 +26,7 @@ struct Routine: Identifiable, Codable {
         case title, description, duration, difficulty
         case likeCount = "like_count"
         case forkCount = "fork_count"
+        case usageCount = "usage_count"
         case status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -98,6 +101,10 @@ struct RoutineExecution: Identifiable, Codable {
     let status: String
     let startedAt: String
     let completedAt: String?
+    /// 시작 ~ 완료 사이 실제 소요 초 (FollowRoutineView 의 elapsedSeconds)
+    let durationSeconds: Int?
+    /// 사용자가 피드로 공유한 경우 그 피드 ID (NULL=공유 안 함)
+    let feedId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -106,6 +113,8 @@ struct RoutineExecution: Identifiable, Codable {
         case status
         case startedAt = "started_at"
         case completedAt = "completed_at"
+        case durationSeconds = "duration_seconds"
+        case feedId = "feed_id"
     }
 }
 

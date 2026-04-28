@@ -234,12 +234,13 @@ struct FeedDetailView: View {
                         AsyncImage(url: URL(string: image.imageUrl)) { phase in
                             switch phase {
                             case .success(let img):
-                                img.resizable().scaledToFill()
+                                // 원본 비율 유지 — 가로/세로 비율 그대로 표시
+                                img.resizable().scaledToFit()
                             default:
                                 Rectangle().fill(Color.theme.surface)
                             }
                         }
-                        .frame(width: 120, height: 120)
+                        .frame(height: 160)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
@@ -357,12 +358,13 @@ struct FeedDetailView: View {
                 }
             }
 
-            // 제목
-            if let title = feed.title, !title.isEmpty {
-                HStack(spacing: 4) {
-                    Text(title)
-                        .font(.appHeadline2)
+            // 내용 + 해시태그 (본문 하단 인라인 — Instagram 스타일)
+            if let content = feed.content, !content.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(content)
+                        .font(.appBody)
                         .foregroundColor(.theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                     if feed.isEdited {
                         Text("(편집됨)")
                             .font(.system(size: 10))
@@ -371,11 +373,12 @@ struct FeedDetailView: View {
                 }
             }
 
-            // 내용
-            if let content = feed.content, !content.isEmpty {
-                Text(content)
+            // 해시태그 — 본문 아래 secondary 톤으로 부드럽게 노출
+            if !feed.hashtags.isEmpty {
+                Text(feed.hashtags.joined(separator: " "))
                     .font(.appBody)
-                    .foregroundColor(.theme.textSecondary)
+                    .foregroundColor(.theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // 차량 정보
@@ -785,7 +788,6 @@ struct EditFeedView: View {
     @ObservedObject var feedService: FeedService
     var onUpdated: (Feed) -> Void
 
-    @State private var title: String
     @State private var content: String
     @State private var location: String
     @State private var washMethod: String
@@ -796,7 +798,6 @@ struct EditFeedView: View {
         self.feed = feed
         self.feedService = feedService
         self.onUpdated = onUpdated
-        _title = State(initialValue: feed.title ?? "")
         _content = State(initialValue: feed.content ?? "")
         _location = State(initialValue: feed.location ?? "")
         _washMethod = State(initialValue: feed.washMethod ?? "")
@@ -810,15 +811,6 @@ struct EditFeedView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // 제목
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("제목")
-                                .font(.appLabel)
-                                .foregroundColor(.theme.textSecondary)
-                            TextField("세차 제목을 입력하세요", text: $title)
-                                .washHubTextField()
-                        }
-
                         // 내용
                         VStack(alignment: .leading, spacing: 8) {
                             Text("내용")
@@ -875,8 +867,9 @@ struct EditFeedView: View {
                                 Text("저장").primaryButtonStyle()
                             }
                         }
-                        .disabled(title.isEmpty || isLoading)
-                        .opacity(title.isEmpty ? 0.4 : 1.0)
+                        // 제목 deprecated — 저장 가능 조건은 본문 비어있지 않은 것
+                        .disabled(content.isEmpty || isLoading)
+                        .opacity(content.isEmpty ? 0.4 : 1.0)
                     }
                     .padding(16)
                 }
@@ -906,7 +899,6 @@ struct EditFeedView: View {
             do {
                 try await feedService.updateFeed(
                     id: feed.id,
-                    title: title.isEmpty ? nil : title,
                     content: content.isEmpty ? nil : content,
                     location: location.isEmpty ? nil : location,
                     washMethod: washMethod.isEmpty ? nil : washMethod

@@ -39,8 +39,8 @@ struct FeedSearchRow: View {
                 }
                 .foregroundColor(.theme.secondary)
 
-                // 제목
-                Text(feed.title ?? feed.content?.prefix(40).description ?? "피드")
+                // 본문 발췌 (제목은 deprecated)
+                Text(feed.content?.prefix(40).description ?? "세차 피드")
                     .font(.appBodyMedium)
                     .foregroundColor(.theme.textPrimary)
                     .lineLimit(1)
@@ -73,8 +73,8 @@ struct EquipmentSearchRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // 이미지
-            if let url = equipment.imageUrl, !url.isEmpty {
+            // 이미지 — 검색 결과 행도 작은 사이즈이므로 썸네일 우선
+            if let url = equipment.displayThumbnailUrl, !url.isEmpty {
                 AsyncImage(url: URL(string: url)) { phase in
                     switch phase {
                     case .success(let image):

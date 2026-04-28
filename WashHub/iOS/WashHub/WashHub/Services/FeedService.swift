@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit  // UIImage — 썸네일 생성 시 사용
 import Supabase
 
 @MainActor
@@ -10,7 +11,7 @@ final class FeedService: ObservableObject {
 
     private let pageSize = 10
 
-    private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year)"
+    private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)"
 
     // MARK: - 캐시 (첫 페이지만 60초 — pagination 결과는 캐싱 안 함)
     // @StateObject 가 매 뷰마다 인스턴스를 만들기 때문에 static 으로 인스턴스 간 공유한다
@@ -109,27 +110,39 @@ final class FeedService: ObservableObject {
         }
     }
 
+    // MARK: - 피드 업로드 이미지 (Data + 원본 사이즈)
+    /// 호출 측에서 UIImage 의 size 를 보존하여 전달 — 상세 화면에서 컨테이너 비율 동적 결정에 사용
+    struct UploadImage {
+        let data: Data
+        let width: Int
+        let height: Int
+    }
+
     // MARK: - 피드 작성
+    /// - Parameter thumbnailFromBefore: true면 Before 사진을, false면 After 사진을 리스트 카드 썸네일로 사용
+    /// - Parameter hashtags: 클라이언트에서 추출한 해시태그 (HashtagGenerator 결과)
+    /// - Note: 제목(title) 필드는 deprecated — DB 컬럼은 backward compat으로 유지하지만 빈 문자열로 저장
     func createFeed(
-        title: String?,
         content: String?,
         location: String?,
         washMethod: String?,
         carId: String?,
-        beforeImages: [Data],
-        afterImages: [Data],
-        extraImages: [Data] = [],
+        beforeImages: [UploadImage],
+        afterImages: [UploadImage],
+        extraImages: [UploadImage] = [],
+        thumbnailFromBefore: Bool = false,
+        hashtags: [String] = [],
         isSponsored: Bool = false,
         sponsorName: String? = nil
     ) async throws -> String {
         let session = try await supabase.auth.session
         let feedId = UUID().uuidString
 
-        // 1. 피드 레코드 생성
+        // 1. 피드 레코드 생성 — title 컬럼은 deprecated, 빈 문자열로 저장
         var feedData: [String: String] = [
             "id": feedId,
             "user_id": session.user.id.uuidString,
-            "title": title ?? "",
+            "title": "",
             "content": content ?? "",
             "location": location ?? "",
             "wash_method": washMethod ?? "",
@@ -149,21 +162,23 @@ final class FeedService: ObservableObject {
             .execute()
 
         // 2. Before 이미지 업로드 및 레코드 생성
-        // 썸네일 우선순위: AFTER 첫 이미지 > BEFORE 첫 이미지 > EXTRA 첫 이미지
-        var thumbnailUrl: String?
-        var beforeFirstUrl: String?
-        for (index, imageData) in beforeImages.enumerated() {
+        // 썸네일 후보 우선순위: AFTER 첫 이미지 > BEFORE 첫 이미지 > EXTRA 첫 이미지
+        // 썸네일은 풀이미지가 아닌 200px 별도 파일로 저장 (리스트 화면 트래픽 절감)
+        var thumbnailSourceData: Data?         // 200px 썸네일 생성용 원본 Data
+        var beforeFirstThumbnailSource: Data?  // BEFORE fallback
+        var extraFirstThumbnailSource: Data?   // EXTRA fallback
+        for (index, image) in beforeImages.enumerated() {
             let path = "\(feedId)/before/\(index).jpg"
             try await supabase.storage
                 .from("feeds")
-                .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg"))
+                .upload(path: path, file: image.data, options: .init(contentType: "image/jpeg"))
 
             let publicUrl = try supabase.storage
                 .from("feeds")
                 .getPublicURL(path: path)
 
             if index == 0 {
-                beforeFirstUrl = publicUrl.absoluteString
+                beforeFirstThumbnailSource = image.data
             }
 
             try await supabase
@@ -172,25 +187,27 @@ final class FeedService: ObservableObject {
                     "feed_id": feedId,
                     "image_type": "BEFORE",
                     "image_url": publicUrl.absoluteString,
-                    "display_order": "\(index)"
+                    "display_order": "\(index)",
+                    "width": "\(image.width)",
+                    "height": "\(image.height)"
                 ])
                 .execute()
         }
 
         // 3. After 이미지 업로드 및 레코드 생성
-        for (index, imageData) in afterImages.enumerated() {
+        for (index, image) in afterImages.enumerated() {
             let path = "\(feedId)/after/\(index).jpg"
             try await supabase.storage
                 .from("feeds")
-                .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg"))
+                .upload(path: path, file: image.data, options: .init(contentType: "image/jpeg"))
 
             let publicUrl = try supabase.storage
                 .from("feeds")
                 .getPublicURL(path: path)
 
-            // After 첫 이미지가 있다면 썸네일로 우선 채택
+            // After 첫 이미지가 있다면 썸네일 소스로 우선 채택
             if index == 0 {
-                thumbnailUrl = publicUrl.absoluteString
+                thumbnailSourceData = image.data
             }
 
             try await supabase
@@ -199,30 +216,26 @@ final class FeedService: ObservableObject {
                     "feed_id": feedId,
                     "image_type": "AFTER",
                     "image_url": publicUrl.absoluteString,
-                    "display_order": "\(index)"
+                    "display_order": "\(index)",
+                    "width": "\(image.width)",
+                    "height": "\(image.height)"
                 ])
                 .execute()
         }
 
-        // After 이미지가 없으면 Before 첫 이미지로 fallback
-        if thumbnailUrl == nil {
-            thumbnailUrl = beforeFirstUrl
-        }
-
         // 4. Extra 이미지 업로드 및 레코드 생성
-        for (index, imageData) in extraImages.enumerated() {
+        for (index, image) in extraImages.enumerated() {
             let path = "\(feedId)/extra/\(index).jpg"
             try await supabase.storage
                 .from("feeds")
-                .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg"))
+                .upload(path: path, file: image.data, options: .init(contentType: "image/jpeg"))
 
             let publicUrl = try supabase.storage
                 .from("feeds")
                 .getPublicURL(path: path)
 
-            // Before/After 모두 없으면 Extra 첫 이미지로 fallback
-            if thumbnailUrl == nil && index == 0 {
-                thumbnailUrl = publicUrl.absoluteString
+            if index == 0 {
+                extraFirstThumbnailSource = image.data
             }
 
             try await supabase
@@ -231,25 +244,87 @@ final class FeedService: ObservableObject {
                     "feed_id": feedId,
                     "image_type": "EXTRA",
                     "image_url": publicUrl.absoluteString,
-                    "display_order": "\(index)"
+                    "display_order": "\(index)",
+                    "width": "\(image.width)",
+                    "height": "\(image.height)"
                 ])
                 .execute()
         }
 
-        // 5. 썸네일 URL 업데이트
-        // feed_images 트리거(`feed_images_refresh_thumbnail`) 가 자동으로 채우지만
-        // 즉시성을 위해 클라이언트에서도 한 번 더 갱신 시도.
-        // 실패해도 트리거가 이미 채워놓았을 것이므로 throw 하지 않고 로그만 남김.
-        // TODO-minam: RLS 정책으로 feeds.update 가 반복 실패하면 로그 분석 필요
-        if let thumbnailUrl = thumbnailUrl {
+        // 5. 썸네일(200px) 생성 + 별도 파일로 업로드 + DB 갱신
+        // 사용자 선택(thumbnailFromBefore) 에 따라 우선순위 결정
+        // - thumbnailFromBefore=true:  Before > After > Extra
+        // - thumbnailFromBefore=false: After > Before > Extra (기본)
+        let chosenSource: Data?
+        let chosenSourceType: String?  // 리스트 카드 배지용 — 'BEFORE' / 'AFTER' / 'EXTRA'
+        if thumbnailFromBefore {
+            if let s = beforeFirstThumbnailSource {
+                chosenSource = s; chosenSourceType = "BEFORE"
+            } else if let s = thumbnailSourceData {
+                chosenSource = s; chosenSourceType = "AFTER"
+            } else if let s = extraFirstThumbnailSource {
+                chosenSource = s; chosenSourceType = "EXTRA"
+            } else {
+                chosenSource = nil; chosenSourceType = nil
+            }
+        } else {
+            if let s = thumbnailSourceData {
+                chosenSource = s; chosenSourceType = "AFTER"
+            } else if let s = beforeFirstThumbnailSource {
+                chosenSource = s; chosenSourceType = "BEFORE"
+            } else if let s = extraFirstThumbnailSource {
+                chosenSource = s; chosenSourceType = "EXTRA"
+            } else {
+                chosenSource = nil; chosenSourceType = nil
+            }
+        }
+        var thumbnailUrl: String?
+        if let sourceData = chosenSource,
+           let sourceImage = UIImage(data: sourceData),
+           let thumbData = sourceImage.thumbnailJpegData() {
+            let thumbPath = "\(feedId)/thumbnail.jpg"
+            do {
+                try await supabase.storage
+                    .from("feeds")
+                    .upload(path: thumbPath, file: thumbData, options: .init(contentType: "image/jpeg", upsert: true))
+                let publicUrl = try supabase.storage.from("feeds").getPublicURL(path: thumbPath)
+                thumbnailUrl = publicUrl.absoluteString
+            } catch {
+                // TODO-minam: 썸네일 업로드 실패 시 로그 분석 — DB 트리거가 풀이미지로 fallback 처리
+                print("⚠️ 썸네일 업로드 실패 (DB 트리거가 fallback): \(error)")
+            }
+        }
+
+        // feed_images 트리거(`feed_images_refresh_thumbnail`) 가 자동으로 풀이미지를 채우지만
+        // 우리가 만든 200px 썸네일이 있으면 그것으로 덮어쓴다 (즉시성).
+        // 또한 썸네일 소스 종류(BEFORE/AFTER/EXTRA)도 함께 저장 → 리스트 카드 배지에 활용.
+        if thumbnailUrl != nil || chosenSourceType != nil {
+            var update: [String: String] = [:]
+            if let url = thumbnailUrl { update["thumbnail_url"] = url }
+            if let type = chosenSourceType { update["thumbnail_image_type"] = type }
             do {
                 try await supabase
                     .from("feeds")
-                    .update(["thumbnail_url": thumbnailUrl])
+                    .update(update)
                     .eq("id", value: feedId)
                     .execute()
             } catch {
-                print("⚠️ thumbnail_url 직접 업데이트 실패 (DB 트리거가 fallback 처리): \(error)")
+                print("⚠️ thumbnail 메타 업데이트 실패 (DB 트리거가 fallback 처리): \(error)")
+            }
+        }
+
+        // 5b. 해시태그 저장 — 별도 UPDATE 사용 (배열 타입이라 [String:String] 딕셔너리에 못 담음)
+        if !hashtags.isEmpty {
+            struct HashtagsUpdate: Encodable { let hashtags: [String] }
+            do {
+                try await supabase
+                    .from("feeds")
+                    .update(HashtagsUpdate(hashtags: hashtags))
+                    .eq("id", value: feedId)
+                    .execute()
+            } catch {
+                // TODO-minam: 해시태그 저장 실패는 피드 자체에 치명적이지 않으므로 로그만
+                print("⚠️ 해시태그 저장 실패: \(error)")
             }
         }
 
@@ -262,6 +337,14 @@ final class FeedService: ObservableObject {
                     timeZone: TimeZone(identifier: "Asia/Seoul") ?? .current,
                     formatOptions: [.withFullDate, .withDashSeparatorInDate]
                 )
+                // wash_log memo 는 본문 1줄 발췌 — 너무 길면 잘라서 저장 (DB row 가독성)
+                let memo: String = {
+                    guard let raw = content?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+                        return "피드에서 자동 생성"
+                    }
+                    let firstLine = raw.split(separator: "\n").first.map(String.init) ?? raw
+                    return String(firstLine.prefix(80))
+                }()
                 try await supabase
                     .from("wash_logs")
                     .insert([
@@ -269,7 +352,7 @@ final class FeedService: ObservableObject {
                         "car_id": carId,
                         "feed_id": feedId,
                         "wash_date": today,
-                        "memo": title ?? "피드에서 자동 생성",
+                        "memo": memo,
                         "status": "ACTIVE"
                     ])
                     .execute()
@@ -290,22 +373,20 @@ final class FeedService: ObservableObject {
     }
 
     // MARK: - 피드 수정
+    /// - Note: 제목(title) 필드는 deprecated — 호출 측에서 더 이상 전달하지 않음. DB에서도 비우지 않고 그대로 둠
     func updateFeed(
         id: String,
-        title: String?,
         content: String?,
         location: String?,
         washMethod: String?
     ) async throws {
         struct FeedUpdate: Encodable {
-            let title: String
             let content: String
             let location: String
             let wash_method: String
             let is_edited: Bool
         }
         let payload = FeedUpdate(
-            title: title ?? "",
             content: content ?? "",
             location: location ?? "",
             wash_method: washMethod ?? "",

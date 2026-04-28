@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import UIKit          // UIImage
+import Photos         // PHPhotoLibrary — Before/After 사진을 사용자 앨범에 저장
 import Supabase
 
 @MainActor
@@ -121,9 +123,10 @@ final class RoutineExecutionService: ObservableObject {
                 completedAt: nowString
             )
 
-            // 모든 step 완료 시 자동 완료 처리
+            // 모든 step 완료 시 자동 완료 처리 (호출 측에서 elapsedSeconds 알 수 없으니
+            // duration 미지정으로 호출 — 명시적 완료에서만 duration 기록)
             if executionSteps.allSatisfy({ $0.completed }) {
-                await completeExecution()
+                await completeExecution(durationSeconds: nil)
             }
         } catch {
             print("Toggle step error: \(error)")
@@ -131,13 +134,28 @@ final class RoutineExecutionService: ObservableObject {
     }
 
     // MARK: - 실행 완료
-    func completeExecution() async {
+    /// - Parameter durationSeconds: 시작부터 완료까지 실제 소요 초. 자동 완료 시 nil 가능
+    func completeExecution(durationSeconds: Int? = nil) async {
         guard let execution = currentExecution else { return }
+        // 이미 완료 처리된 경우 중복 호출 방지 (DB trigger 가 카운트를 1번만 올리도록 보장하지만 클라이언트 호출도 막음)
+        guard execution.status != "COMPLETED" else { return }
+
         do {
             let now = ISO8601DateFormatter().string(from: Date())
+            // duration 이 있으면 함께 업데이트
+            struct CompleteUpdate: Encodable {
+                let status: String
+                let completed_at: String
+                let duration_seconds: Int?
+            }
+            let payload = CompleteUpdate(
+                status: "COMPLETED",
+                completed_at: now,
+                duration_seconds: durationSeconds
+            )
             try await supabase
                 .from("routine_executions")
-                .update(["status": "COMPLETED", "completed_at": now])
+                .update(payload)
                 .eq("id", value: execution.id)
                 .execute()
 
@@ -147,7 +165,9 @@ final class RoutineExecutionService: ObservableObject {
                 userId: execution.userId,
                 status: "COMPLETED",
                 startedAt: execution.startedAt,
-                completedAt: now
+                completedAt: now,
+                durationSeconds: durationSeconds,
+                feedId: execution.feedId
             )
         } catch {
             print("Complete execution error: \(error)")
@@ -167,6 +187,53 @@ final class RoutineExecutionService: ObservableObject {
             executionSteps = []
         } catch {
             print("Abandon execution error: \(error)")
+        }
+    }
+
+    // MARK: - 사용자가 피드로 공유 후 호출 — 실행 → 피드 역링크
+    /// 피드 작성이 성공적으로 완료된 후 호출. routine_executions.feed_id 업데이트
+    func linkFeed(feedId: String) async {
+        guard let execution = currentExecution else { return }
+        do {
+            try await supabase
+                .from("routine_executions")
+                .update(["feed_id": feedId])
+                .eq("id", value: execution.id)
+                .execute()
+            currentExecution = RoutineExecution(
+                id: execution.id,
+                routineId: execution.routineId,
+                userId: execution.userId,
+                status: execution.status,
+                startedAt: execution.startedAt,
+                completedAt: execution.completedAt,
+                durationSeconds: execution.durationSeconds,
+                feedId: feedId
+            )
+        } catch {
+            print("Link feed to execution error: \(error)")
+        }
+    }
+
+    // MARK: - 사진을 사용자 Photos 앨범에 저장
+    /// Before/After 캡처 시 호출. 앱은 reference 안 가짐 (사용자 자산)
+    /// - Returns: 저장 성공 여부 (실패 시 권한 문제일 가능성)
+    static func savePhotoToAlbum(_ image: UIImage) async -> Bool {
+        // PhotoLibrary add 권한 요청 — Info.plist 의 NSPhotoLibraryAddUsageDescription 필요 (이미 있음)
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            print("⚠️ Photos 권한 거부 — 사진 저장 불가")
+            return false
+        }
+        return await withCheckedContinuation { continuation in
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            } completionHandler: { success, error in
+                if let error = error {
+                    print("⚠️ Photos 앨범 저장 실패: \(error)")
+                }
+                continuation.resume(returning: success)
+            }
         }
     }
 

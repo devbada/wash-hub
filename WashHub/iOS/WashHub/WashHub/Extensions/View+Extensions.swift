@@ -39,6 +39,14 @@ extension UIImage {
         // 최저 품질로도 실패 시 — 호출 측에서 사이즈 재검증 필요
         return resizedImage.jpegData(compressionQuality: 0.25)
     }
+
+    /// 리스트 화면 카드용 썸네일 JPEG 생성.
+    /// - 사이즈: 400px (60x60~120x120 표시 영역 + Retina @3x 대응)
+    /// - 용량: 최대 300KB (품질 0.85 ~ 0.7 범위 유지하여 화질 손상 최소화)
+    /// - 풀이미지(1024px, ~2MB) 대비 트래픽 약 80% 절감 + 화질은 거의 동일.
+    func thumbnailJpegData(maxDimension: CGFloat = 400) -> Data? {
+        return jpegDataUnder(maxDimension: maxDimension, maxBytes: 300 * 1024)
+    }
 }
 
 // MARK: - 공통 View Modifier (Electric Neon Premium Design System)

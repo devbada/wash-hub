@@ -127,13 +127,6 @@ struct FollowingFeedCard: View {
             }
 
             // 피드 내용
-            if let title = feed.title, !title.isEmpty {
-                Text(title)
-                    .font(.appBodyMedium)
-                    .foregroundColor(.theme.textPrimary)
-                    .lineLimit(2)
-            }
-
             if let content = feed.content, !content.isEmpty {
                 Text(content)
                     .font(.appBody)

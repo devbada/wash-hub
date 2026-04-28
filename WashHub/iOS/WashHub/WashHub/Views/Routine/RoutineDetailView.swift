@@ -128,13 +128,14 @@ struct RoutineDetailView: View {
 
                 Spacer()
 
+                // 완료한 사람 수 — DB trigger 로 자동 카운트되는 실제 따라하기 완료 수
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("FORK")
+                    Text("FOLLOWED")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.theme.textSecondary)
-                    Text("\(routine.forkCount)회")
+                    Text("\(routine.usageCount)명 완료")
                         .font(.appBodyBold)
-                        .foregroundColor(.theme.primary)
+                        .foregroundColor(.theme.secondary)
                 }
             }
             .padding(14)

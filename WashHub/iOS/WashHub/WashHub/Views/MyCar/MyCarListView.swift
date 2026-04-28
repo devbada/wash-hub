@@ -220,6 +220,7 @@ struct AddMyCarView: View {
     @State private var carModel = ""
     @State private var carColor = ""
     @State private var carYear = ""
+    @State private var nickname = ""
     @State private var isPrimary = false
     @State private var isLoading = false
     @State private var carImage: UIImage?
@@ -286,6 +287,7 @@ struct AddMyCarView: View {
                         }
 
                         TextField("차량 모델명", text: $carModel).washHubTextField()
+                        TextField("별명 (선택, 예: 내검둥이)", text: $nickname).washHubTextField()
                         TextField("색상 (선택)", text: $carColor).washHubTextField()
                         TextField("연식 (선택)", text: $carYear).washHubTextField()
                             .keyboardType(.numberPad)
@@ -325,6 +327,7 @@ struct AddMyCarView: View {
                     carModel = car.carModel
                     carColor = car.carColor ?? ""
                     carYear = car.carYear.map { "\($0)" } ?? ""
+                    nickname = car.nickname ?? ""
                     isPrimary = car.isPrimary
                 }
             }
@@ -368,7 +371,9 @@ struct AddMyCarView: View {
 
                 var data: [String: String] = [
                     "car_model": carModel,
-                    "is_primary": isPrimary ? "true" : "false"
+                    "is_primary": isPrimary ? "true" : "false",
+                    // 별명은 빈 문자열도 허용 (사용자가 별명 지웠을 수도 있음)
+                    "nickname": nickname.trimmingCharacters(in: .whitespacesAndNewlines)
                 ]
                 if !carColor.isEmpty { data["car_color"] = carColor }
                 if let year = Int(carYear) { data["car_year"] = "\(year)" }
@@ -412,6 +417,8 @@ struct AddMyCarView: View {
                 ]
                 if !carColor.isEmpty { data["car_color"] = carColor }
                 if let year = Int(carYear) { data["car_year"] = "\(year)" }
+                let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedNickname.isEmpty { data["nickname"] = trimmedNickname }
                 data["is_primary"] = isPrimary ? "true" : "false"
                 if let imageUrl = imageUrl { data["image_url"] = imageUrl }
 
@@ -457,7 +464,7 @@ struct WashLogListView: View {
             do {
                 let persistLogs: [WashLog] = try await supabase
                     .from("wash_logs")
-                    .select("*, feeds(id, title, thumbnail_url, like_count, comment_count)")
+                    .select("*, feeds(id, content, thumbnail_url, like_count, comment_count)")
                     .eq("car_id", value: car.id)
                     .eq("status", value: "ACTIVE")
                     .order("wash_date", ascending: false)
@@ -562,10 +569,10 @@ struct WashLogRow: View {
                         .lineLimit(2)
                 }
 
-                // 피드 제목 + 좋아요/댓글 카운트
+                // 피드 본문 발췌 + 좋아요/댓글 카운트
                 if let feed = log.feeds {
-                    if let title = feed.title, !title.isEmpty {
-                        Text(title)
+                    if let content = feed.content, !content.isEmpty {
+                        Text(content)
                             .font(.appCaption)
                             .foregroundColor(.theme.textSecondary)
                             .lineLimit(1)

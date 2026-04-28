@@ -7,6 +7,8 @@ struct MyCar: Identifiable, Codable, Hashable {
     let carColor: String?
     let carYear: Int?
     let carNumber: String?
+    /// 사용자가 부여한 별명 — 피드 작성 시 해시태그로 자동 추가됨 (예: "내검둥이" → "#내검둥이")
+    let nickname: String?
     let imageUrl: String?
     let isPrimary: Bool
     let status: String
@@ -20,6 +22,7 @@ struct MyCar: Identifiable, Codable, Hashable {
         case carColor = "car_color"
         case carYear = "car_year"
         case carNumber = "car_number"
+        case nickname
         case imageUrl = "image_url"
         case isPrimary = "is_primary"
         case status
@@ -60,14 +63,14 @@ struct WashLog: Identifiable, Codable {
 /// 세차 기록에 JOIN 되는 피드 요약 정보
 struct WashLogFeedSummary: Codable {
     let id: String
-    let title: String?
+    let content: String?
     let thumbnailUrl: String?
     let likeCount: Int
     let commentCount: Int
 
     enum CodingKeys: String, CodingKey {
         case id
-        case title
+        case content
         case thumbnailUrl = "thumbnail_url"
         case likeCount = "like_count"
         case commentCount = "comment_count"

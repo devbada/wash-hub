@@ -104,9 +104,9 @@ final class SearchService: ObservableObject {
         do {
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year)")
+                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)")
                 .eq("status", value: "ACTIVE")
-                .or("title.ilike.\(pattern),content.ilike.\(pattern)")
+                .or("content.ilike.\(pattern)")
                 .order("created_at", ascending: false)
                 .range(from: offset, to: offset + pageSize - 1)
                 .execute()

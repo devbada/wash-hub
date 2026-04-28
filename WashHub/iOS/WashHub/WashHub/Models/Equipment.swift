@@ -8,6 +8,8 @@ struct Equipment: Identifiable, Codable {
     let description: String?
     let price: Int?
     let imageUrl: String?
+    /// 리스트 표시용 200px 썸네일. nil이면 imageUrl로 fallback
+    let thumbnailUrl: String?
     let userId: String?
     let rating: Double?
     let reviewCount: Int?
@@ -23,6 +25,7 @@ struct Equipment: Identifiable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, category, brand, description, price
         case imageUrl = "image_url"
+        case thumbnailUrl = "thumbnail_url"
         case userId = "user_id"
         case rating
         case reviewCount = "review_count"
@@ -32,6 +35,12 @@ struct Equipment: Identifiable, Codable {
         case affiliateUrlCoupang = "affiliate_url_coupang"
         case affiliateUrlNaver = "affiliate_url_naver"
         case affiliateUrl11st = "affiliate_url_11st"
+    }
+
+    /// 리스트 표시용 이미지 URL — 썸네일 우선, 없으면 풀이미지로 fallback
+    var displayThumbnailUrl: String? {
+        if let thumb = thumbnailUrl, !thumb.isEmpty { return thumb }
+        return imageUrl
     }
 
     /// 유효한 제휴 링크 목록

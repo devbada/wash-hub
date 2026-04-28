@@ -327,6 +327,19 @@ struct FeedCard: View {
             thumbnailView
                 .frame(height: 200)
                 .clipped()
+                .overlay(alignment: .topTrailing) {
+                    // 썸네일이 Before/After 중 어떤 것인지 배지로 노출 (legacy 피드는 미표시)
+                    if let badge = feed.thumbnailBadgeLabel {
+                        Text(badge)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.55))
+                            .cornerRadius(6)
+                            .padding(8)
+                    }
+                }
 
             // 정보 영역
             VStack(alignment: .leading, spacing: 8) {
@@ -369,11 +382,19 @@ struct FeedCard: View {
                         .foregroundColor(.theme.textDisabled)
                 }
 
-                // 제목
-                if let title = feed.title, !title.isEmpty {
-                    Text(title)
-                        .font(.appBodyMedium)
+                // 본문 발췌 (사진 중심 — 본문은 짧은 미리보기로만 표시)
+                if let content = feed.content, !content.isEmpty {
+                    Text(content)
+                        .font(.appBody)
                         .foregroundColor(.theme.textPrimary)
+                        .lineLimit(2)
+                }
+
+                // 해시태그 (있을 때만, 한 줄 max)
+                if !feed.hashtags.isEmpty {
+                    Text(feed.hashtags.joined(separator: " "))
+                        .font(.appSmall)
+                        .foregroundColor(.theme.secondary)
                         .lineLimit(1)
                 }
 

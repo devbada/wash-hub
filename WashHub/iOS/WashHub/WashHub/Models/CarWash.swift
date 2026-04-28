@@ -11,6 +11,8 @@ struct CarWash: Identifiable, Codable {
     let hours: String?
     let washType: String?
     let imageUrl: String?
+    /// 리스트 표시용 200px 썸네일. nil이면 imageUrl로 fallback
+    let thumbnailUrl: String?
     let userId: String?
     let rating: Double?
     let reviewCount: Int?
@@ -22,12 +24,19 @@ struct CarWash: Identifiable, Codable {
         case id, name, address, latitude, longitude, phone, description, hours
         case washType = "wash_type"
         case imageUrl = "image_url"
+        case thumbnailUrl = "thumbnail_url"
         case userId = "user_id"
         case rating
         case reviewCount = "review_count"
         case status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    /// 리스트 표시용 이미지 URL — 썸네일 우선, 없으면 풀이미지로 fallback
+    var displayThumbnailUrl: String? {
+        if let thumb = thumbnailUrl, !thumb.isEmpty { return thumb }
+        return imageUrl
     }
 }
 

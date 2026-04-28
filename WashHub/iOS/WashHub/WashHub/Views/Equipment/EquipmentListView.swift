@@ -169,7 +169,8 @@ struct EquipmentCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: equipment.imageUrl ?? "")) { phase in
+            // 리스트 카드는 200px 썸네일 우선 (없으면 풀이미지로 fallback)
+            AsyncImage(url: URL(string: equipment.displayThumbnailUrl ?? "")) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().scaledToFill()
@@ -1082,8 +1083,9 @@ struct EditEquipmentView: View {
 
         Task {
             do {
-                // 1. 새 이미지 업로드 (변경된 경우)
+                // 1. 새 이미지 + 200px 썸네일 업로드 (변경된 경우)
                 var imageUrlString: String? = imageChanged ? nil : equipment.imageUrl
+                var thumbnailUrlString: String? = imageChanged ? nil : equipment.thumbnailUrl
                 if imageChanged, let image = selectedImage,
                    let imageData = image.jpegDataUnder(maxDimension: 1024, maxBytes: 2 * 1024 * 1024) {
                     let path = "equipments/\(equipment.id).jpg"
@@ -1095,7 +1097,23 @@ struct EditEquipmentView: View {
                         .from("equipments")
                         .getPublicURL(path: path)
                     // 캐시 무효화를 위해 타임스탬프 파라미터 추가
-                    imageUrlString = publicUrl.absoluteString + "?t=\(Int(Date().timeIntervalSince1970))"
+                    let timestamp = Int(Date().timeIntervalSince1970)
+                    imageUrlString = publicUrl.absoluteString + "?t=\(timestamp)"
+
+                    // 썸네일도 함께 갱신 (실패해도 풀이미지로 fallback)
+                    if let thumbData = image.thumbnailJpegData() {
+                        let thumbPath = "equipments/\(equipment.id)_thumb.jpg"
+                        do {
+                            try await supabase.storage
+                                .from("equipments")
+                                .upload(path: thumbPath, file: thumbData, options: .init(contentType: "image/jpeg", upsert: true))
+                            let thumbUrl = try supabase.storage.from("equipments").getPublicURL(path: thumbPath)
+                            thumbnailUrlString = thumbUrl.absoluteString + "?t=\(timestamp)"
+                        } catch {
+                            print("⚠️ Equipment 썸네일 업데이트 실패 (풀이미지로 fallback): \(error)")
+                            thumbnailUrlString = nil
+                        }
+                    }
                 }
 
                 // 2. 레코드 업데이트
@@ -1115,6 +1133,11 @@ struct EditEquipmentView: View {
                 } else if imageChanged {
                     // 이미지가 삭제된 경우 — 빈 문자열로 설정
                     data["image_url"] = ""
+                }
+                if let thumb = thumbnailUrlString {
+                    data["thumbnail_url"] = thumb
+                } else if imageChanged {
+                    data["thumbnail_url"] = ""
                 }
 
                 let persistUpdated: [Equipment] = try await supabase
@@ -1293,8 +1316,9 @@ struct AddEquipmentView: View {
                 let session = try await supabase.auth.session
                 let equipmentId = UUID().uuidString
 
-                // 1. 이미지 업로드 (선택 시)
+                // 1. 이미지 + 200px 썸네일 업로드 (선택 시)
                 var imageUrlString: String?
+                var thumbnailUrlString: String?
                 if let image = selectedImage,
                    let imageData = image.jpegDataUnder(maxDimension: 1024, maxBytes: 2 * 1024 * 1024) {
                     let path = "equipments/\(equipmentId).jpg"
@@ -1305,6 +1329,20 @@ struct AddEquipmentView: View {
                         .from("equipments")
                         .getPublicURL(path: path)
                     imageUrlString = publicUrl.absoluteString
+
+                    // 썸네일 — 실패해도 풀이미지로 fallback 되므로 전체 업로드는 throw 하지 않음
+                    if let thumbData = image.thumbnailJpegData() {
+                        let thumbPath = "equipments/\(equipmentId)_thumb.jpg"
+                        do {
+                            try await supabase.storage
+                                .from("equipments")
+                                .upload(path: thumbPath, file: thumbData, options: .init(contentType: "image/jpeg"))
+                            let thumbUrl = try supabase.storage.from("equipments").getPublicURL(path: thumbPath)
+                            thumbnailUrlString = thumbUrl.absoluteString
+                        } catch {
+                            print("⚠️ Equipment 썸네일 업로드 실패 (풀이미지로 fallback): \(error)")
+                        }
+                    }
                 }
 
                 // 2. 레코드 생성
@@ -1319,6 +1357,7 @@ struct AddEquipmentView: View {
                 if !description.isEmpty { data["description"] = description }
                 if let p = Int(price) { data["price"] = "\(p)" }
                 if let url = imageUrlString { data["image_url"] = url }
+                if let thumb = thumbnailUrlString { data["thumbnail_url"] = thumb }
 
                 try await supabase.from("equipments").insert(data).execute()
                 // 카탈로그 캐시 무효화

@@ -166,14 +166,16 @@ struct RoutineCard: View {
                     .foregroundColor(.theme.textSecondary)
                 }
 
-                // 따라하기 수
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 11))
-                    Text("\(routine.forkCount)")
-                        .font(.system(size: 10, weight: .bold))
+                // 완료한 사람 수 (실제 따라하기 끝낸 횟수)
+                if routine.usageCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 11))
+                        Text("\(routine.usageCount)명 완료")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.theme.secondary)
                 }
-                .foregroundColor(.theme.textSecondary)
             }
 
             // Step preview chips

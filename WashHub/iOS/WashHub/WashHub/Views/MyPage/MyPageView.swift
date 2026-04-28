@@ -159,7 +159,7 @@ struct MyPageView: View {
 
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year)")
+                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)")
                 .in("id", values: feedIds)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: false)
@@ -339,7 +339,8 @@ struct MyPageView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(feed.title ?? "제목 없음")
+                                    // 본문 발췌 (제목은 deprecated — 사진 중심 UI)
+                                    Text(feed.content?.prefix(40).description ?? "세차 피드")
                                         .font(.appCaptionMedium)
                                         .foregroundColor(.theme.textPrimary)
                                         .lineLimit(1)
