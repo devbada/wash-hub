@@ -13,17 +13,22 @@ final class DynamicIconService {
     static let shared = DynamicIconService()
     private init() {}
 
+    /// 디버그 모드에서 자동 업데이트 방지용 플래그
+    #if DEBUG
+    private var debugOverrideActive = false
+    #endif
+
     // MARK: - 아이콘 단계 결정
 
     /// 마지막 세차일로부터 경과 일수에 따른 아이콘 이름 반환
-    /// - Returns: nil = Primary(Stage1), "AppIconStage2"~"AppIconStage5"
+    /// - Returns: nil = Primary(Stage1), "AppIconStage2"~"AppIconWashMe"
     func iconName(daysSinceWash days: Int) -> String? {
         switch days {
         case 0...2:  return nil              // Stage 1: Primary Icon
         case 3...5:  return "AppIconStage2"  // Clean
         case 6...10: return "AppIconStage3"  // Normal
         case 11...20: return "AppIconStage4" // Dirty
-        default:     return "AppIconStage5"  // Wash Me (21+)
+        default:     return "AppIconWashMe"  // Wash Me (21+)
         }
     }
 
@@ -31,6 +36,14 @@ final class DynamicIconService {
 
     /// 마지막 세차 기록을 조회하여 앱 아이콘을 자동 변경
     func updateIconIfNeeded() async {
+        #if DEBUG
+        // 디버그 테스트 중이면 자동 업데이트 건너뛰기
+        if debugOverrideActive {
+            print("🧪 DynamicIconService: debugOverride active — skipping auto update")
+            return
+        }
+        #endif
+
         // 게스트 또는 미로그인 시 기본 아이콘
         guard let userId = supabase.auth.currentUser?.id.uuidString else {
             await setIcon(nil)
@@ -96,12 +109,45 @@ final class DynamicIconService {
     // MARK: - 아이콘 설정
 
     private func setIcon(_ name: String?) async {
-        guard UIApplication.shared.supportsAlternateIcons else { return }
+        guard UIApplication.shared.supportsAlternateIcons else {
+            print("⚠️ DynamicIconService: supportsAlternateIcons = false")
+            return
+        }
+        print("🔄 DynamicIconService: attempting setAlternateIconName(\(name ?? "nil/Primary"))")
+        print("🔄 DynamicIconService: current alternateIconName = \(UIApplication.shared.alternateIconName ?? "nil/Primary")")
         do {
             try await UIApplication.shared.setAlternateIconName(name)
-            print("DynamicIconService: icon changed to \(name ?? "Primary")")
+            print("✅ DynamicIconService: icon changed to \(name ?? "Primary")")
         } catch {
-            print("DynamicIconService: setAlternateIconName error - \(error)")
+            print("❌ DynamicIconService: setAlternateIconName FAILED - \(error)")
+            print("❌ DynamicIconService: error localizedDescription - \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - 디버그 (개발 중 테스트용 — 출시 전 제거)
+
+    /// 특정 Stage로 강제 변경 (1=Primary, 2~5)
+    /// 자동 업데이트를 30초간 비활성화하여 테스트 결과 확인 가능
+    /// - Note: Stage 5는 iOS 26.4에서 "AppIconStage5" 이름이 거부되는 이슈가 있어 "AppIconWashMe"로 매핑됨
+    func debugSetStage(_ stage: Int) async {
+        debugOverrideActive = true
+        let name: String?
+        switch stage {
+        case ...1:  name = nil               // Primary (Stage 1)
+        case 2:     name = "AppIconStage2"
+        case 3:     name = "AppIconStage3"
+        case 4:     name = "AppIconStage4"
+        default:    name = "AppIconWashMe"   // Stage 5+
+        }
+        print("🧪 DynamicIconService: DEBUG force set to Stage \(stage) → \(name ?? "Primary")")
+        print("🧪 DynamicIconService: auto-update disabled for 30s")
+        await setIcon(name)
+
+        // 30초 후 자동 업데이트 복원
+        Task {
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            debugOverrideActive = false
+            print("🧪 DynamicIconService: auto-update re-enabled")
         }
     }
 }

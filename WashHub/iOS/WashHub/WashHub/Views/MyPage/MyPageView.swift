@@ -488,6 +488,31 @@ struct MyPageView: View {
     // MARK: - 설정
     private var settingsSection: some View {
         VStack(spacing: 8) {
+            // TODO-minam: 디버그용 아이콘 테스트 — 출시 전 제거
+            #if DEBUG
+            VStack(spacing: 6) {
+                Text("🧪 앱 아이콘 테스트")
+                    .font(.appCaption)
+                    .foregroundColor(.theme.textSecondary)
+                HStack(spacing: 8) {
+                    ForEach(1...5, id: \.self) { stage in
+                        Button("S\(stage)") {
+                            Task {
+                                await DynamicIconService.shared.debugSetStage(stage)
+                            }
+                        }
+                        .font(.appSmall)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.theme.surfaceLow)
+                        .cornerRadius(8)
+                    }
+                }
+            }
+            .padding(16)
+            .cardStyle()
+            #endif
+
             // 차단 관리
             Button(action: { showBlockedUsers = true }) {
                 HStack {
