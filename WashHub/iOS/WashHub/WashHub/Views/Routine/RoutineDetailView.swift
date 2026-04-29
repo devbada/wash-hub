@@ -59,7 +59,10 @@ struct RoutineDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $showFollowRoutine) {
+        // 따라하기 시트 dismiss 후 → usage_count 등 최신 값 반영을 위해 재조회
+        .fullScreenCover(isPresented: $showFollowRoutine, onDismiss: {
+            Task { await reloadRoutine() }
+        }) {
             if let routine = routine {
                 FollowRoutineView(routine: routine)
                     .environmentObject(authManager)
@@ -72,8 +75,8 @@ struct RoutineDetailView: View {
             Text("따라하기는 로그인 후 이용할 수 있습니다.")
         }
         .task {
+            await reloadRoutine()
             let service = RoutineService()
-            routine = await service.loadRoutine(id: routineId)
             products = await service.loadProducts(routineId: routineId)
         }
         .onAppear {
@@ -85,6 +88,14 @@ struct RoutineDetailView: View {
             withAnimation(.easeInOut(duration: 0.3)) {
                 AppUIState.shared.hideBottomUI = false
             }
+        }
+    }
+
+    /// 루틴 데이터 재조회 — 따라하기 완료 후 usage_count 즉시 반영용
+    private func reloadRoutine() async {
+        let service = RoutineService()
+        if let fresh = await service.loadRoutine(id: routineId) {
+            routine = fresh
         }
     }
 
@@ -130,10 +141,10 @@ struct RoutineDetailView: View {
 
                 // 완료한 사람 수 — DB trigger 로 자동 카운트되는 실제 따라하기 완료 수
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("FOLLOWED")
+                    Text("따라했어요")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.theme.textSecondary)
-                    Text("\(routine.usageCount)명 완료")
+                    Text("\(routine.usageCount)명")
                         .font(.appBodyBold)
                         .foregroundColor(.theme.secondary)
                 }

@@ -95,42 +95,9 @@ struct FollowRoutineView: View {
                         .shadow(color: Color.theme.primary.opacity(0.4), radius: 5)
                 }
             }
-            // ① 시작 직전: Before 사진 찍기 권유
-            .confirmationDialog("시작 사진을 찍어볼까요?", isPresented: $showBeforeCaptureSheet, titleVisibility: .visible) {
-                Button("사진 찍기") {
-                    capturePhase = .before
-                    photoPickerActive = true
-                }
-                Button("건너뛰기", role: .cancel) {
-                    Task { await startNewExecution() }
-                }
-            } message: {
-                Text("나중에 피드로 공유할 때 빠르게 사용할 수 있어요. 사진은 사진 앨범에 저장됩니다.")
-            }
-            // ② 완료 직후: After 사진 찍기 권유
-            .confirmationDialog("완료 사진도 남겨볼까요?", isPresented: $showAfterCaptureSheet, titleVisibility: .visible) {
-                Button("사진 찍기") {
-                    capturePhase = .after
-                    photoPickerActive = true
-                }
-                Button("건너뛰기", role: .cancel) {
-                    showShareDecisionSheet = true
-                }
-            } message: {
-                Text("Before/After 비교 사진이 있으면 더 멋진 피드가 됩니다.")
-            }
-            // ③ 피드 공유 의사
-            .confirmationDialog("이 결과를 피드로 공유할까요?", isPresented: $showShareDecisionSheet, titleVisibility: .visible) {
-                Button("피드 작성하기") {
-                    showCreateFeedSheet = true
-                }
-                Button("그냥 마치기", role: .cancel) {
-                    stopTimer()
-                    dismiss()
-                }
-            } message: {
-                let minutes = max(1, elapsedSeconds / 60)
-                Text("\(minutes)분 동안 \(totalCount)단계를 완료하셨어요. 수고하셨어요!")
+            // ① ② ③ — 하단 고정 커스텀 시트 (fullScreenCover 안에서 confirmationDialog 가 상단에 뜨는 이슈 회피)
+            .overlay(alignment: .bottom) {
+                bottomCaptureSheets
             }
             // ④ 카메라 — "사진 찍기" 탭 시 즉시 카메라 실행 (소스 선택 단계 없음)
             .fullScreenCover(isPresented: $photoPickerActive) {
@@ -440,6 +407,89 @@ struct FollowRoutineView: View {
         }
     }
 
+    // MARK: - 하단 시트 (Before / After / Share) — fullScreenCover 안에서 confirmationDialog 위치 이슈 회피용
+    @ViewBuilder
+    private var bottomCaptureSheets: some View {
+        ZStack(alignment: .bottom) {
+            // 어떤 시트라도 활성일 때 dimmed 배경
+            if showBeforeCaptureSheet || showAfterCaptureSheet || showShareDecisionSheet {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .onTapGesture {
+                        // 배경 탭 = 건너뛰기 / 마치기 (보수적 cancel)
+                        if showBeforeCaptureSheet {
+                            showBeforeCaptureSheet = false
+                            Task { await startNewExecution() }
+                        } else if showAfterCaptureSheet {
+                            showAfterCaptureSheet = false
+                            showShareDecisionSheet = true
+                        } else if showShareDecisionSheet {
+                            showShareDecisionSheet = false
+                            stopTimer()
+                            dismiss()
+                        }
+                    }
+            }
+
+            if showBeforeCaptureSheet {
+                BottomActionCard(
+                    title: "시작 사진을 찍어볼까요?",
+                    message: "나중에 피드로 공유할 때 빠르게 사용할 수 있어요. 사진은 사진 앨범에 저장됩니다.",
+                    primaryLabel: "사진 찍기",
+                    primaryAction: {
+                        showBeforeCaptureSheet = false
+                        capturePhase = .before
+                        photoPickerActive = true
+                    },
+                    cancelLabel: "건너뛰기",
+                    cancelAction: {
+                        showBeforeCaptureSheet = false
+                        Task { await startNewExecution() }
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if showAfterCaptureSheet {
+                BottomActionCard(
+                    title: "완료 사진도 남겨볼까요?",
+                    message: "Before/After 비교 사진이 있으면 더 멋진 피드가 됩니다.",
+                    primaryLabel: "사진 찍기",
+                    primaryAction: {
+                        showAfterCaptureSheet = false
+                        capturePhase = .after
+                        photoPickerActive = true
+                    },
+                    cancelLabel: "건너뛰기",
+                    cancelAction: {
+                        showAfterCaptureSheet = false
+                        showShareDecisionSheet = true
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if showShareDecisionSheet {
+                BottomActionCard(
+                    title: "이 결과를 피드로 공유할까요?",
+                    message: "\(max(1, elapsedSeconds / 60))분 동안 \(totalCount)단계를 완료하셨어요. 수고하셨어요!",
+                    primaryLabel: "피드 작성하기",
+                    primaryAction: {
+                        showShareDecisionSheet = false
+                        showCreateFeedSheet = true
+                    },
+                    cancelLabel: "그냥 마치기",
+                    cancelAction: {
+                        showShareDecisionSheet = false
+                        stopTimer()
+                        dismiss()
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showBeforeCaptureSheet)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showAfterCaptureSheet)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showShareDecisionSheet)
+    }
+
     /// 모든 단계 완료 후: duration 저장 → After 사진 권유 → 공유 시트
     private func finalizeRoutine() async {
         // duration_seconds 와 함께 완료 처리 (이미 완료 상태면 service guard 로 noop)
@@ -503,3 +553,5 @@ struct FollowRoutineView: View {
         return String(format: "%02d:%02d", m, s)
     }
 }
+
+// 하단 시트 카드 정의는 Views/Common/BottomActionCard.swift 로 이동 (공용)

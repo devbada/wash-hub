@@ -99,6 +99,10 @@ struct RoutineListView: View {
         .task {
             await routineService.loadRoutines()
         }
+        // 루틴 완료 알림 수신 시 카운트(따라했어요) 즉시 갱신
+        .onReceive(NotificationCenter.default.publisher(for: .routineCompleted)) { _ in
+            Task { await routineService.loadRoutines() }
+        }
     }
 }
 

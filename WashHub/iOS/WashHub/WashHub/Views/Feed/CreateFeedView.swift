@@ -342,7 +342,9 @@ struct CreateFeedView: View {
             .onChange(of: washMethod) { _ in scheduleHashtagRefresh() }
             // 차량 선택은 탭 한 번에 끝나므로 즉시 갱신해도 부담 없음
             .onChange(of: selectedCarId) { _ in refreshHashtagSuggestions() }
-            .background(
+            // ImageSourcePicker 의 BottomSheetOverlay 가 form 위에 보이도록 overlay 로 부착
+            // (background 에 두면 BottomSheet 가 form 뒤로 숨음. confirmationDialog 일 때는 window-level 렌더라 무관했음)
+            .overlay(
                 ImageSourcePicker(
                     isPresented: $showImageSourcePicker,
                     onImageReady: { image in
@@ -359,6 +361,8 @@ struct CreateFeedView: View {
                         activePickerType = nil
                     }
                 )
+                // 닫혀있을 때(BottomSheet 없음) tap 이벤트 가로막지 않도록 — overlay 컨테이너에 hit-test 비활성
+                .allowsHitTesting(showImageSourcePicker)
             )
         }
     }
@@ -789,16 +793,26 @@ struct ImageSourcePicker: View {
     var body: some View {
         ZStack {
             Color.clear
-                .confirmationDialog("사진 추가", isPresented: $isPresented, titleVisibility: .visible) {
-                    Button("앨범에서 선택") {
-                        showPhotoPicker = true
+                // 하단 시트 — Routine 흐름과 동일한 BottomActionCard 스타일
+                .overlay(alignment: .bottom) {
+                    BottomSheetOverlay(isPresented: $isPresented) {
+                        BottomActionCard(
+                            title: "사진 추가",
+                            message: "어디에서 가져올까요?",
+                            primaryLabel: "앨범에서 선택",
+                            primaryAction: {
+                                isPresented = false
+                                showPhotoPicker = true
+                            },
+                            secondaryLabel: UIImagePickerController.isSourceTypeAvailable(.camera) ? "카메라로 촬영" : nil,
+                            secondaryAction: UIImagePickerController.isSourceTypeAvailable(.camera) ? {
+                                isPresented = false
+                                showCamera = true
+                            } : nil,
+                            cancelLabel: "취소",
+                            cancelAction: { isPresented = false }
+                        )
                     }
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button("카메라로 촬영") {
-                            showCamera = true
-                        }
-                    }
-                    Button("취소", role: .cancel) {}
                 }
                 .sheet(isPresented: $showPhotoPicker) {
                     ImagePicker(sourceType: .photoLibrary) { image in

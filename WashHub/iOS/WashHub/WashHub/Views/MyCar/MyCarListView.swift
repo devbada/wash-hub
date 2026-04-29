@@ -331,13 +331,15 @@ struct AddMyCarView: View {
                     isPrimary = car.isPrimary
                 }
             }
-            .background(
+            // BottomSheet 가 form 위에 보이도록 overlay 로 부착 (allowsHitTesting 으로 닫혀있을 땐 비활성화)
+            .overlay(
                 ImageSourcePicker(
                     isPresented: $showImageSourcePicker,
                     onImageReady: { image in
                         carImage = image
                     }
                 )
+                .allowsHitTesting(showImageSourcePicker)
             )
         }
     }

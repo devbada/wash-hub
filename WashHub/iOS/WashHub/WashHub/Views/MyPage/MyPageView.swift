@@ -745,7 +745,8 @@ struct EditProfileView: View {
             } message: {
                 Text("프로필이 업데이트되었습니다.")
             }
-            .background(
+            // BottomSheet 가 form 위에 보이도록 overlay 로 부착
+            .overlay(
                 ImageSourcePicker(
                     isPresented: $showImageSourcePicker,
                     skipFaceMosaic: true,  // 프로필 사진은 얼굴 모자이크 제외
@@ -753,6 +754,7 @@ struct EditProfileView: View {
                         selectedAvatar = image
                     }
                 )
+                .allowsHitTesting(showImageSourcePicker)
             )
             .onAppear {
                 nickname = authManager.currentUser?.nickname ?? ""

@@ -169,6 +169,13 @@ final class RoutineExecutionService: ObservableObject {
                 durationSeconds: durationSeconds,
                 feedId: execution.feedId
             )
+
+            // List/Detail 화면 즉시 갱신 (DB trigger 가 usage_count 를 +1 했으므로 재조회 필요)
+            NotificationCenter.default.post(
+                name: .routineCompleted,
+                object: nil,
+                userInfo: ["routineId": execution.routineId]
+            )
         } catch {
             print("Complete execution error: \(error)")
         }
