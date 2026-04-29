@@ -17,7 +17,11 @@ struct RoutineListView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.theme.surface.ignoresSafeArea()
+                // 배경 탭 → 검색창 키보드 닫기
+                // (Color 가 ZStack 의 가장 아래 레이어라 검색바/카드 등 인터랙티브 요소와 충돌 X)
+                Color.theme.surface
+                    .ignoresSafeArea()
+                    .onTapGesture { hideKeyboard() }
 
                 VStack(spacing: 0) {
                     // 검색바 — Stitch: rounded-xl, surfaceHigh bg
@@ -54,19 +58,33 @@ struct RoutineListView: View {
                         }
                         Spacer()
                     } else {
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(filteredRoutines) { routine in
-                                    NavigationLink(destination: RoutineDetailView(routineId: routine.id)) {
-                                        RoutineCard(routine: routine)
+                        ScrollViewReader { scrollProxy in
+                            ScrollView {
+                                LazyVStack(spacing: 16) {
+                                    // 스크롤 최상단 앵커 — 탭 더블탭 시 이 지점으로 이동
+                                    Color.clear.frame(height: 0).id("top")
+
+                                    ForEach(filteredRoutines) { routine in
+                                        NavigationLink(destination: RoutineDetailView(routineId: routine.id)) {
+                                            RoutineCard(routine: routine)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
+                                }
+                                .padding(16)
+                            }
+                            // 스크롤 시 키보드 즉시 닫힘
+                            .scrollDismissesKeyboard(.immediately)
+                            .refreshable {
+                                await routineService.loadRoutines()
+                            }
+                            // 동일 탭(루틴=2) 재탭 → 최상단으로 스크롤
+                            .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
+                                guard (note.userInfo?["tab"] as? Int) == 2 else { return }
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    scrollProxy.scrollTo("top", anchor: .top)
                                 }
                             }
-                            .padding(16)
-                        }
-                        .refreshable {
-                            await routineService.loadRoutines()
                         }
                     }
                 }
@@ -96,6 +114,14 @@ struct RoutineListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .routineCompleted)) { _ in
             Task { await routineService.loadRoutines() }
         }
+    }
+
+    /// 검색창 키보드 닫기 — 배경 탭 / 코드 트리거에서 사용
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
     }
 }
 

@@ -37,6 +37,12 @@ struct HomeTabView: View {
             }
             .collectCoachmarkAnchors(coachmark)
             .onAppear { triggerCoachmarkIfNeeded() }
+            // 탭 전환 시 스크롤 기반 자동 숨김은 항상 초기화 (다른 탭의 잔존 상태 차단)
+            .onChange(of: selectedTab) { _, _ in
+                if uiState.scrollHidesBottom {
+                    uiState.scrollHidesBottom = false
+                }
+            }
 
             // 코치마크 오버레이 — 최상단
             CoachmarkOverlay(controller: coachmark)
@@ -56,64 +62,74 @@ struct HomeTabView: View {
         }
     }
 
+    /// 하단 UI 숨김 여부 — 강제(댓글/루틴) 또는 스크롤 기반 자동 숨김 둘 중 하나라도 true 면 숨김
+    private var shouldHideBottom: Bool { uiState.shouldHideBottom }
+
     // MARK: - iPhone 레이아웃 (커스텀 탭바 + 중앙 FAB)
+    /// 콘텐츠는 ZStack 의 base 레이어로 항상 풀스크린(탭바 영역까지 차지).
+    /// 탭바/FAB 은 그 위 overlay — 숨김/표시되어도 콘텐츠 영역은 변화 없음.
     private var iPhoneLayout: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                // 콘텐츠 영역
-                Group {
-                    switch selectedTab {
-                    case 0:  FeedListView()
-                    case 2:  RoutineListView()
-                    case 3:  EquipmentListView()
-                    case 4:  MyCarListView()
-                    default: FeedListView()
-                    }
+            // 콘텐츠 — 항상 풀스크린 (탭바 영역 포함). 스크롤 시 layout 변화 없음
+            Group {
+                switch selectedTab {
+                case 0:  FeedListView()
+                case 2:  RoutineListView()
+                case 3:  EquipmentListView()
+                case 4:  MyCarListView()
+                default: FeedListView()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // 커스텀 하단 탭바
+            // 커스텀 하단 탭바 — overlay (콘텐츠 위에 떠있음). 숨김 시 슬라이드 다운
+            if !shouldHideBottom {
                 customTabBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // 중앙 FAB — 댓글/루틴 따라하기 시 숨김
+            // 중앙 FAB — 댓글/루틴 따라하기/스크롤 다운 시 숨김
             createFloatingButton
-                .offset(y: uiState.hideBottomUI ? 120 : 6)
-                .opacity(uiState.hideBottomUI ? 0 : 1)
-                .animation(.easeInOut(duration: 0.3), value: uiState.hideBottomUI)
-                .allowsHitTesting(!uiState.hideBottomUI)
+                .offset(y: shouldHideBottom ? 120 : 6)
+                .opacity(shouldHideBottom ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
+                .allowsHitTesting(!shouldHideBottom)
         }
+        .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
     }
 
     // MARK: - iPad 레이아웃 (커스텀 탭바 + 우측 하단 FAB)
     private var iPadLayout: some View {
         ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 0) {
-                // 콘텐츠 영역 — 활성 탭만 렌더링 (제스처 충돌 방지)
-                Group {
-                    switch selectedTab {
-                    case 0:  FeedListView()
-                    case 2:  RoutineListView()
-                    case 3:  EquipmentListView()
-                    case 4:  MyCarListView()
-                    default: FeedListView()
-                    }
+            // 콘텐츠 — 항상 풀스크린 (제스처 충돌 방지로 활성 탭만 렌더링)
+            Group {
+                switch selectedTab {
+                case 0:  FeedListView()
+                case 2:  RoutineListView()
+                case 3:  EquipmentListView()
+                case 4:  MyCarListView()
+                default: FeedListView()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // 커스텀 하단 탭바
+            // 커스텀 하단 탭바 — overlay
+            if !shouldHideBottom {
                 customTabBar
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // 우측 하단 FAB — 댓글/루틴 따라하기 시 숨김
+            // 우측 하단 FAB — overlay
             createFloatingButton
                 .padding(.trailing, 28)
                 .padding(.bottom, 80)
-                .offset(y: uiState.hideBottomUI ? 120 : 0)
-                .opacity(uiState.hideBottomUI ? 0 : 1)
-                .animation(.easeInOut(duration: 0.3), value: uiState.hideBottomUI)
-                .allowsHitTesting(!uiState.hideBottomUI)
+                .offset(y: shouldHideBottom ? 120 : 0)
+                .opacity(shouldHideBottom ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
+                .allowsHitTesting(!shouldHideBottom)
         }
+        .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
     }
 
     // MARK: - 커스텀 탭바 (iPhone + iPad 공용)
@@ -145,6 +161,15 @@ struct HomeTabView: View {
         Button {
             if authManager.isGuest && tag == 4 {
                 showLoginAlert = true
+                return
+            }
+            // 동일 탭 재탭 → 스크롤 최상단 이동 / 다른 탭 → 일반 전환
+            if selectedTab == tag {
+                NotificationCenter.default.post(
+                    name: .requestScrollToTop,
+                    object: nil,
+                    userInfo: ["tab": tag]
+                )
             } else {
                 selectedTab = tag
             }

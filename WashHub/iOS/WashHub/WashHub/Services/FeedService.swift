@@ -553,4 +553,66 @@ final class FeedService: ObservableObject {
             return []
         }
     }
+
+    /// 내 피드 — 페이지네이션 버전 (마이페이지 '모두 보기' 진입 시 사용)
+    /// - Parameters:
+    ///   - userId: 본인 ID
+    ///   - offset: 시작 인덱스
+    ///   - pageSize: 한 번에 가져올 개수 (기본 20)
+    func loadMyFeedsPage(userId: String, offset: Int, pageSize: Int = 20) async -> [Feed] {
+        do {
+            let persistFeeds: [Feed] = try await supabase
+                .from("feeds")
+                .select(feedSelect)
+                .eq("user_id", value: userId)
+                .neq("status", value: "DELETED")
+                .order("created_at", ascending: false)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute()
+                .value
+            return persistFeeds
+        } catch {
+            print("My feeds page load error: \(error)")
+            return []
+        }
+    }
+
+    /// 좋아요한 피드 — 페이지네이션 버전
+    /// 좋아요 시각 기준 내림차순으로 가져옴
+    func loadLikedFeedsPage(userId: String, offset: Int, pageSize: Int = 20) async -> [Feed] {
+        struct LikeRow: Decodable {
+            let feedId: String
+            enum CodingKeys: String, CodingKey { case feedId = "feed_id" }
+        }
+        do {
+            // 1) feed_likes 에서 좋아요 한 feed_id 들 (최신순) 페이지 단위로
+            let persistLikes: [LikeRow] = try await supabase
+                .from("feed_likes")
+                .select("feed_id, created_at")
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute()
+                .value
+
+            let feedIds = persistLikes.map { $0.feedId }
+            guard !feedIds.isEmpty else { return [] }
+
+            // 2) 해당 feeds 일괄 조회
+            let persistFeeds: [Feed] = try await supabase
+                .from("feeds")
+                .select(feedSelect)
+                .eq("status", value: "ACTIVE")
+                .in("id", values: feedIds)
+                .execute()
+                .value
+
+            // 좋아요 순서(최신순) 보존을 위해 feedIds 기준 정렬
+            let order = Dictionary(uniqueKeysWithValues: feedIds.enumerated().map { ($1, $0) })
+            return persistFeeds.sorted { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) }
+        } catch {
+            print("Liked feeds page load error: \(error)")
+            return []
+        }
+    }
 }

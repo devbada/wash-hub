@@ -81,16 +81,28 @@ struct EquipmentListView: View {
                             .foregroundColor(.theme.textDisabled)
                         Spacer()
                     } else {
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                ForEach(filteredEquipments) { equipment in
-                                    NavigationLink(destination: EquipmentDetailView(equipment: equipment, onChanged: { await loadEquipments(forceRefresh: true) })) {
-                                        EquipmentCard(equipment: equipment)
+                        ScrollViewReader { scrollProxy in
+                            ScrollView {
+                                LazyVStack(spacing: 12) {
+                                    // 스크롤 최상단 앵커 — 탭 더블탭 시 이 지점으로 이동
+                                    Color.clear.frame(height: 0).id("top")
+
+                                    ForEach(filteredEquipments) { equipment in
+                                        NavigationLink(destination: EquipmentDetailView(equipment: equipment, onChanged: { await loadEquipments(forceRefresh: true) })) {
+                                            EquipmentCard(equipment: equipment)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
+                                }
+                                .padding(16)
+                            }
+                            // 동일 탭(케미컬=3) 재탭 → 최상단으로 스크롤
+                            .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
+                                guard (note.userInfo?["tab"] as? Int) == 3 else { return }
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    scrollProxy.scrollTo("top", anchor: .top)
                                 }
                             }
-                            .padding(16)
                         }
                     }
                 }

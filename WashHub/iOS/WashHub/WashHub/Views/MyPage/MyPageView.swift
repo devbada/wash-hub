@@ -314,9 +314,11 @@ struct MyPageView: View {
                 .frame(maxWidth: .infinity)
             }
 
-            // 피드 리스트
-            let feeds = selectedTab == 0 ? myFeeds : likedFeeds
-            if feeds.isEmpty {
+            // 피드 리스트 — 마이페이지에서는 최신 5개만 미리보기, 그 이상은 '모두 보기' 진입
+            let allFeeds = selectedTab == 0 ? myFeeds : likedFeeds
+            let previewLimit = 5
+            let feeds = Array(allFeeds.prefix(previewLimit))
+            if allFeeds.isEmpty {
                 Text(selectedTab == 0 ? "작성한 피드가 없습니다" : "좋아요한 피드가 없습니다")
                     .font(.appCaption)
                     .foregroundColor(.theme.textDisabled)
@@ -368,6 +370,31 @@ struct MyPageView: View {
                             }
                             .padding(10)
                             .cardStyle()
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // 미리보기 한도(5개) 초과 시 — 전체 보기 진입
+                    if allFeeds.count > previewLimit, let myId = authManager.currentUser?.id {
+                        NavigationLink(destination: MyFeedListPageView(
+                            mode: selectedTab == 0 ? .myFeeds : .likedFeeds,
+                            userId: myId
+                        )) {
+                            HStack {
+                                Spacer()
+                                Text("\(allFeeds.count)개 모두 보기")
+                                    .font(.appCaptionMedium)
+                                    .foregroundColor(.theme.secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.theme.secondary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.theme.secondary.opacity(0.08))
+                            )
                         }
                         .buttonStyle(.plain)
                     }

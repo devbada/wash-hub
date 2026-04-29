@@ -148,6 +148,10 @@ extension Notification.Name {
 
     /// 가운데 FAB → 내차 추가 요청 — MyCarListView 가 자체 추가 sheet 띄움
     static let requestMyCarCreate = Notification.Name("requestMyCarCreate")
+
+    /// 동일 탭 재탭 → 해당 화면이 스크롤을 최상단으로 이동
+    /// userInfo["tab"]: Int — 0=피드, 2=루틴, 3=케미컬, 4=내차
+    static let requestScrollToTop = Notification.Name("requestScrollToTop")
 }
 
 /// 세차지수 모델

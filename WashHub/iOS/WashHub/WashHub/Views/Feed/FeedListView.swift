@@ -7,6 +7,10 @@ struct FeedListView: View {
     @State private var showLoginAlert = false
     @State private var loadId = UUID()
     @State private var navigatedFeedId: String?
+    /// 더블탭 좋아요 시각 피드백 — 현재 큰 하트가 보이는 피드 ID
+    @State private var heartAnimationFeedId: String?
+    /// 스크롤 idle 감지용 — 일정 시간 추가 스크롤 없으면 탭바 자동 표시
+    @State private var scrollIdleTask: Task<Void, Never>?
     @ObservedObject private var notificationService = NotificationService.shared
 
     /// 차단 사용자 필터링된 피드 목록
@@ -94,8 +98,12 @@ struct FeedListView: View {
                     .padding(.bottom, 4)
 
                     // 컨텐츠 — 세차지수 위젯은 피드 유무와 무관하게 항상 상단 노출
+                    ScrollViewReader { scrollProxy in
                     ScrollView {
                         LazyVStack(spacing: 16) {
+                            // 스크롤 최상단 앵커 — 탭 더블탭 시 이 지점으로 이동
+                            Color.clear.frame(height: 0).id("top")
+
                             // 세차지수 위젯 (피드가 없어도 표시)
                             WashIndexCard()
                                 .padding(.horizontal, 16)
@@ -111,16 +119,32 @@ struct FeedListView: View {
                                     .padding(.top, 20)
                             } else {
                                 ForEach(filteredFeeds) { feed in
-                                    Button {
-                                        navigatedFeedId = feed.id
-                                    } label: {
+                                    ZStack {
                                         FeedCard(
                                             feed: feed,
                                             isLikedByMe: feedService.likedFeedIds.contains(feed.id)
                                         )
                                         .contentShape(Rectangle())
+                                        // 더블탭 → 좋아요 토글 (인스타 스타일)
+                                        // count: 2 를 먼저 정의해야 SwiftUI 가 단탭 vs 더블탭 분리
+                                        .onTapGesture(count: 2) {
+                                            handleDoubleTapLike(feed: feed)
+                                        }
+                                        // 단탭 → 피드 상세
+                                        .onTapGesture(count: 1) {
+                                            navigatedFeedId = feed.id
+                                        }
+
+                                        // 더블탭 시각 피드백 — 큰 빨간 하트
+                                        if heartAnimationFeedId == feed.id {
+                                            Image(systemName: "heart.fill")
+                                                .font(.system(size: 90, weight: .bold))
+                                                .foregroundColor(.white)
+                                                .shadow(color: .theme.error.opacity(0.6), radius: 12)
+                                                .transition(.scale(scale: 0.4).combined(with: .opacity))
+                                                .allowsHitTesting(false)
+                                        }
                                     }
-                                    .buttonStyle(.plain)
                                     .padding(.horizontal, 16)
                                     .onAppear {
                                         // 무한 스크롤: 마지막 아이템 근처에서 다음 페이지 로드
@@ -146,6 +170,49 @@ struct FeedListView: View {
                         try? await Task.sleep(nanoseconds: 300_000_000)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // 동일 탭(피드) 재탭 → 최상단으로 스크롤
+                    .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
+                        guard (note.userInfo?["tab"] as? Int) == 0 else { return }
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            scrollProxy.scrollTo("top", anchor: .top)
+                        }
+                    }
+                    // 스크롤 방향 감지 → 하단 탭바/FAB 자동 숨김/표시
+                    // - 일정 위치(80pt) 이상에서 아래로 스크롤하면 숨김
+                    // - 위로 스크롤하면 즉시 표시
+                    // - 작은 변화(< 4pt) 는 무시 (탭/햅틱 등 의도치 않은 변동 차단)
+                    // - 스크롤 멈춘 후 1.5초 동안 추가 스크롤 없으면 탭바 자동 복귀
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y
+                    } action: { oldValue, newValue in
+                        let delta = newValue - oldValue
+                        if abs(delta) < 4 { return }
+                        let scrollingDown = delta > 0
+                        if scrollingDown && newValue > 80 {
+                            if !AppUIState.shared.scrollHidesBottom {
+                                AppUIState.shared.scrollHidesBottom = true
+                            }
+                        } else if !scrollingDown {
+                            if AppUIState.shared.scrollHidesBottom {
+                                AppUIState.shared.scrollHidesBottom = false
+                            }
+                        }
+
+                        // idle 타이머 — 스크롤 변화가 멈추면 1.5초 후 탭바 자동 표시
+                        scrollIdleTask?.cancel()
+                        scrollIdleTask = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            if !Task.isCancelled, AppUIState.shared.scrollHidesBottom {
+                                AppUIState.shared.scrollHidesBottom = false
+                            }
+                        }
+                    }
+                    .onDisappear {
+                        // 다른 화면(피드 상세 등) 진입 시 자동 숨김 해제 — 돌아왔을 때 일관된 시작점
+                        scrollIdleTask?.cancel()
+                        AppUIState.shared.scrollHidesBottom = false
+                    }
+                    } // ScrollViewReader 닫기
                 }
             }
             // 프로그래밍 방식 네비게이션 — iPad에서 인라인 NavigationLink 터치 이슈 우회
@@ -198,6 +265,48 @@ struct FeedListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .blockStatusChanged)) { _ in
             // 차단/해제 시 피드 전체 리로드 — AsyncImage 캐시 갱신
             loadId = UUID()
+        }
+    }
+
+    // MARK: - 더블탭 좋아요 (추가 전용)
+    /// 인스타 스타일 — 카드 더블탭 시 좋아요 추가 + 큰 하트 애니메이션
+    /// - 이미 좋아요 한 피드는 시각 피드백만 표시(귀여움 유지) + 서버 호출/해제 없음
+    /// - 좋아요 해제는 피드 상세에서만 가능
+    /// - 게스트는 로그인 alert
+    private func handleDoubleTapLike(feed: Feed) {
+        if authManager.isGuest {
+            showLoginAlert = true
+            return
+        }
+
+        // 시각 피드백은 항상 표시 (이미 좋아요 한 상태에서도 큰 하트 등장)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.55)) {
+            heartAnimationFeedId = feed.id
+        }
+        let animationFeedId = feed.id
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            // 도중에 다른 카드 더블탭으로 바뀐 경우 무시
+            if heartAnimationFeedId == animationFeedId {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    heartAnimationFeedId = nil
+                }
+            }
+        }
+
+        // 이미 좋아요 한 피드는 서버 호출 안 함 (해제 방지)
+        guard !feedService.likedFeedIds.contains(feed.id) else { return }
+
+        // 좋아요 추가
+        Task {
+            do {
+                _ = try await feedService.toggleLike(feedId: feed.id)
+                // 카운터 동기화 — 잠깐 대기 후 단일 피드 갱신
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                await feedService.refreshFeed(id: feed.id)
+            } catch {
+                print("Double-tap like error: \(error)")
+            }
         }
     }
 
