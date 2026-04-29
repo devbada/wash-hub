@@ -164,8 +164,9 @@ struct WashRhythmCard: View {
     }
 
     private func nextWashRow(date: Date, daysUntil: Int?) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "drop.fill")
+        let weather = rhythmService.nextWashWeather
+        return HStack(spacing: 10) {
+            Image(systemName: weather?.isRainExpected == true ? "cloud.rain.fill" : "drop.fill")
                 .font(.system(size: 14))
                 .foregroundColor(Color.rhythmAccent)
 
@@ -173,9 +174,16 @@ struct WashRhythmCard: View {
                 Text(formattedDDay(daysUntil: daysUntil) + " · " + formattedDate(date))
                     .font(.appCaptionMedium)
                     .foregroundColor(.theme.textPrimary)
-                Text("다음 세차 추천일")
-                    .font(.system(size: 11))
-                    .foregroundColor(.theme.textSecondary)
+                if let w = weather, w.source != .unavailable {
+                    Text(w.message)
+                        .font(.system(size: 11))
+                        .foregroundColor(.theme.textSecondary)
+                        .lineLimit(1)
+                } else {
+                    Text("다음 세차 추천일")
+                        .font(.system(size: 11))
+                        .foregroundColor(.theme.textSecondary)
+                }
             }
             Spacer()
         }

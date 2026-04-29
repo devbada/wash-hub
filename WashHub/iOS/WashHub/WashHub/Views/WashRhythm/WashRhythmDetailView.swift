@@ -219,12 +219,13 @@ struct WashRhythmDetailView: View {
     // MARK: - 다음 세차 카드
 
     private func nextWashCard(date: Date, summary: WashRhythmSummary) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let weather = rhythmService.nextWashWeather
+        return VStack(alignment: .leading, spacing: 12) {
             Text("다음 세차")
                 .font(.appHeadline3)
                 .foregroundColor(.theme.textPrimary)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(dDayLabel(summary.daysUntilNextWash))
                         .font(.system(size: 28, weight: .heavy))
@@ -237,6 +238,47 @@ struct WashRhythmDetailView: View {
                 Text(intervalDescription(summary: summary))
                     .font(.appCaption)
                     .foregroundColor(.theme.textSecondary)
+
+                // 날씨 정보 + 신뢰도 별점
+                if let w = weather, w.source != .unavailable {
+                    Divider().padding(.vertical, 2)
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: w.isRainExpected ? "cloud.rain.fill" : "sun.max.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(w.isRainExpected ? .theme.primary : Color.rhythmAccent)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(w.message)
+                                .font(.appCaption)
+                                .foregroundColor(.theme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            HStack(spacing: 4) {
+                                Text("신뢰도")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.theme.textDisabled)
+                                ForEach(0..<5, id: \.self) { idx in
+                                    Image(systemName: idx < w.reliability ? "star.fill" : "star")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(idx < w.reliability ? Color.rhythmAccent : .theme.textDisabled)
+                                }
+                                if w.source == .longRange {
+                                    Text("(참고용)")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.theme.textDisabled)
+                                }
+                            }
+                        }
+                        Spacer()
+                    }
+                } else if rhythmService.isWeatherLoading {
+                    HStack(spacing: 8) {
+                        ProgressView().tint(Color.rhythmAccent).scaleEffect(0.7)
+                        Text("날씨 확인 중...")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textDisabled)
+                    }
+                }
 
                 HStack {
                     Spacer()

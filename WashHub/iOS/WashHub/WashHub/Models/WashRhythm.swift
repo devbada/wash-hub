@@ -83,3 +83,58 @@ enum WashIntervalOption: Hashable {
     /// 프리셋 일수 목록 (UI 노출 순서)
     static let presetDays: [Int] = [7, 10, 14, 21, 30]
 }
+
+// MARK: - 다음 세차 날씨 (P3-013)
+
+/// 다음 세차 추천일에 표시할 날씨 정보
+///
+/// D-Day 거리에 따라 데이터 소스가 달라진다.
+/// - D-1~7: 7일 예보(`mode: "forecast"`) 의 해당 일자 데이터 — 정확
+/// - D-8~14: 7일 예보가 커버되면 그 데이터, 없으면 장기로 fallback
+/// - D-15~30: 장기(`mode: "longrange"`) — 작년 동일주 평균
+/// - D-30+: 표시 불가
+struct NextWashWeather {
+    enum Source {
+        case shortTerm        // 7일 예보 기반
+        case longRange        // 작년 동일주 평균 기반
+        case unavailable      // 데이터 없음 (D-30+ 또는 작년 데이터 미수집)
+    }
+
+    let source: Source
+    let date: Date
+    let daysUntil: Int
+
+    /// 강수 확률 (단기 예보 기준) — 장기에서는 nil
+    let rainProbability: Int?
+    /// 평균/예측 기온 (℃)
+    let temperature: Double?
+    /// 세차지수 0~100
+    let score: Int?
+    /// 친화적 메시지 — "맑음 · 92점" 또는 "작년 5월 첫째주 평균 비 2일"
+    let message: String
+
+    /// 신뢰도 별점 (1~5)
+    /// - 단기예보(가까울수록): 5
+    /// - 7일 예보 끝(D-7): 4
+    /// - 장기(작년): 2~3
+    /// - unavailable: 0
+    let reliability: Int
+
+    /// 비 예보 또는 작년 비 많았던 주 — UI 에서 비 아이콘 강조
+    let isRainExpected: Bool
+}
+
+/// `weather-proxy` 의 `mode: "longrange"` 응답
+struct LongRangeWeatherResponse: Codable {
+    let targetDate: String
+    let hasData: Bool
+    let avgRainMm: Double?
+    let avgTemp: Double?
+    let avgHumidity: Double?
+    let rainDays: Int
+    let avgScore: Int?
+    let sampleDays: Int
+    /// 1~3
+    let reliability: Int
+    let message: String
+}

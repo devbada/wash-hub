@@ -7,10 +7,16 @@ import Supabase
 final class WashRhythmService: ObservableObject {
     @Published var summary: WashRhythmSummary?
     @Published var isLoading: Bool = false
+    /// 다음 세차일에 대한 날씨 정보 (P3-013)
+    @Published var nextWashWeather: NextWashWeather?
+    @Published var isWeatherLoading: Bool = false
 
     // 차량별 마지막 fetch 시점 캐싱 (60초 throttle)
     private static let cacheTTL: TimeInterval = 60
     private static let summaryCache = TimedCache<String, WashRhythmSummary>(ttl: cacheTTL)
+    /// 날씨는 1시간 캐싱 (단기/장기 모두) — 같은 날짜 반복 조회 시 트래픽 절감
+    private static let weatherCacheTTL: TimeInterval = 60 * 60
+    private static let nextWeatherCache = TimedCache<String, NextWashWeather>(ttl: weatherCacheTTL)
 
     /// 캐시 무효화 — wash_log mutation 또는 주기 변경 시
     static func invalidateCache(carId: String? = nil) {
@@ -116,6 +122,11 @@ final class WashRhythmService: ObservableObject {
 
             summary = result
             Self.summaryCache.set(result, for: car.id)
+
+            // 다음 세차일 날씨도 함께 로드 (가능한 경우)
+            if let next = nextDate, let days = daysUntil {
+                await loadNextWashWeather(for: next, daysUntil: days)
+            }
         } catch {
             print("WashRhythm load error: \(error)")
             summary = nil
@@ -193,6 +204,152 @@ final class WashRhythmService: ObservableObject {
         let startOfFrom = calendar.startOfDay(for: from)
         let startOfTo = calendar.startOfDay(for: to)
         return calendar.dateComponents([.day], from: startOfFrom, to: startOfTo).day
+    }
+
+    // MARK: - 다음 세차일 날씨 로드 (P3-013)
+
+    /// 다음 세차 추천일의 날씨 정보 로드
+    /// - D-Day 거리에 따라 단기/장기 자동 분기
+    /// - 결과는 `nextWashWeather` 에 publish 됨
+    func loadNextWashWeather(for nextDate: Date, daysUntil: Int) async {
+        let cacheKey = Self.dateKey(nextDate) + "-d\(daysUntil)"
+
+        if let cached = Self.nextWeatherCache.value(for: cacheKey) {
+            nextWashWeather = cached
+            isWeatherLoading = false
+            return
+        }
+
+        isWeatherLoading = true
+        defer { isWeatherLoading = false }
+
+        // D-30+ 또는 음수(이미 지남) 는 표시 안 함
+        guard daysUntil >= 0 && daysUntil <= 30 else {
+            let unavailable = NextWashWeather(
+                source: .unavailable,
+                date: nextDate, daysUntil: daysUntil,
+                rainProbability: nil, temperature: nil, score: nil,
+                message: daysUntil < 0
+                    ? "이미 추천일이 지났어요. 곧 다음 세차일이 표시됩니다."
+                    : "30일 이상은 예측이 어려워요.",
+                reliability: 0,
+                isRainExpected: false
+            )
+            nextWashWeather = unavailable
+            return
+        }
+
+        let result: NextWashWeather
+        if daysUntil <= 7 {
+            // 단기 — 7일 예보 데이터 사용 (앱 다른 곳에서 이미 forecast 호출 중이면 재활용)
+            result = await loadShortTermWeather(for: nextDate, daysUntil: daysUntil)
+        } else {
+            // 장기 — Edge Function longrange mode 호출
+            result = await loadLongRangeWeather(for: nextDate, daysUntil: daysUntil)
+        }
+
+        nextWashWeather = result
+        Self.nextWeatherCache.set(result, for: cacheKey)
+    }
+
+    /// 단기(D-1~7) — WashIndexService 의 forecast 데이터를 재사용
+    private func loadShortTermWeather(for nextDate: Date, daysUntil: Int) async -> NextWashWeather {
+        // 7일 예보를 호출 (이미 캐시되어 있으면 즉시 반환)
+        let weatherService = WashIndexService()
+        await weatherService.loadForecast()
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "Asia/Seoul")
+        let targetDateStr = formatter.string(from: nextDate)
+
+        if let day = weatherService.forecast.first(where: { $0.date == targetDateStr }) {
+            // 신뢰도: D-1 ★★★★★, D-7 ★★★★
+            let reliability = max(4, 5 - daysUntil / 3)
+            let isRainExpected = day.rainProbability >= 60 || day.pty > 0
+            let weatherEmoji = day.weatherIcon
+            // 친화적 메시지
+            let weatherText: String = {
+                if day.pty > 0 { return "비 예보" }
+                switch day.sky {
+                case 1: return "맑음"
+                case 3: return "구름많음"
+                default: return "흐림"
+                }
+            }()
+            let msg = "\(weatherText) · \(day.score)점 \(weatherEmoji)"
+            return NextWashWeather(
+                source: .shortTerm,
+                date: nextDate, daysUntil: daysUntil,
+                rainProbability: day.rainProbability,
+                temperature: Double(day.tempMax + day.tempMin) / 2.0,
+                score: day.score,
+                message: msg,
+                reliability: reliability,
+                isRainExpected: isRainExpected
+            )
+        }
+
+        // 단기 예보에 해당 일자가 없으면 장기로 fallback
+        return await loadLongRangeWeather(for: nextDate, daysUntil: daysUntil)
+    }
+
+    /// 장기(D-8~30) — Edge Function `weather-proxy` 의 `mode: "longrange"` 호출
+    private func loadLongRangeWeather(for nextDate: Date, daysUntil: Int) async -> NextWashWeather {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "Asia/Seoul")
+        let targetDateStr = formatter.string(from: nextDate)
+
+        // 사용자 위치 — 현재는 서울 기본 (P3-013 후속에서 CLLocationManager 정확도 향상)
+        let nx = 60, ny = 127, sidoName = "서울"
+
+        struct LongRangeRequest: Encodable {
+            let nx: Int
+            let ny: Int
+            let sidoName: String
+            let mode: String
+            let targetDate: String
+        }
+        let payload = LongRangeRequest(nx: nx, ny: ny, sidoName: sidoName, mode: "longrange", targetDate: targetDateStr)
+
+        do {
+            let resp: LongRangeWeatherResponse = try await supabase.functions
+                .invoke("weather-proxy", options: .init(body: payload))
+
+            if !resp.hasData {
+                return NextWashWeather(
+                    source: .longRange,
+                    date: nextDate, daysUntil: daysUntil,
+                    rainProbability: nil, temperature: nil, score: nil,
+                    message: resp.message,
+                    reliability: 1,
+                    isRainExpected: false
+                )
+            }
+
+            let isRainExpected = resp.rainDays >= 4
+            return NextWashWeather(
+                source: .longRange,
+                date: nextDate, daysUntil: daysUntil,
+                rainProbability: nil,
+                temperature: resp.avgTemp,
+                score: resp.avgScore,
+                message: resp.message,
+                reliability: resp.reliability,
+                isRainExpected: isRainExpected
+            )
+        } catch {
+            print("LongRange weather load error: \(error)")
+            return NextWashWeather(
+                source: .unavailable,
+                date: nextDate, daysUntil: daysUntil,
+                rainProbability: nil, temperature: nil, score: nil,
+                message: "장기 예측 데이터를 가져올 수 없어요. 곧 새 예보가 나옵니다.",
+                reliability: 0,
+                isRainExpected: false
+            )
+        }
     }
 
     private func loadWashCountThisYear(carId: String) async throws -> Int {
