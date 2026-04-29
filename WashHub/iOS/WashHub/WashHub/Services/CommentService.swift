@@ -12,7 +12,7 @@ final class CommentService: ObservableObject {
             // original_content 제외 — 숨김 원본은 클라이언트에 노출하지 않음
             let persistComments: [Comment] = try await supabase
                 .from("comments")
-                .select("id, feed_id, user_id, parent_comment_id, content, status, created_at, updated_at, is_edited, is_hidden, hidden_by, profiles!user_id(id, nickname, avatar_url)")
+                .select("id, feed_id, user_id, parent_comment_id, content, status, created_at, updated_at, is_edited, is_hidden, hidden_by, profiles!user_id(id, nickname, avatar_url, is_official)")
                 .eq("feed_id", value: feedId)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: true)

@@ -7,7 +7,7 @@ final class RoutineService: ObservableObject {
     @Published var routines: [Routine] = []
     @Published var isLoading = false
 
-    private let routineSelect = "*, profiles!user_id(id, nickname, avatar_url), routine_steps(id, routine_id, step_order, title, description, duration, created_at)"
+    private let routineSelect = "*, profiles!user_id(id, nickname, avatar_url, is_official), routine_steps(id, routine_id, step_order, title, description, duration, created_at)"
     private let pageSize = 20
 
     // MARK: - 루틴 목록 조회

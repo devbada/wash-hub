@@ -127,14 +127,15 @@ struct MyCarListView: View {
             // Storage 이미지 삭제
             if let imageUrl = car.imageUrl, imageUrl.contains("my-cars") {
                 let session = try await supabase.auth.session
-                let path = "\(session.user.id.uuidString)/\(car.id).jpg"
-                try? await supabase.storage.from("my-cars").remove(paths: [path])
+                // RLS 정책의 auth.uid()::text 가 소문자이므로 path 도 소문자로 통일
+                let path = "\(session.user.id.uuidString.lowercased())/\(car.id).jpg"
+                _ = try? await supabase.storage.from("my-cars").remove(paths: [path])
             }
 
             // 차량 삭제
             try await supabase.from("my_cars").delete().eq("id", value: car.id).execute()
             // wash_log가 함께 삭제되었으므로 아이콘 캐시도 무효화 → 다음 업데이트 시 재조회
-            await DynamicIconService.shared.invalidateWashLogCache()
+            DynamicIconService.shared.invalidateWashLogCache()
             await DynamicIconService.shared.updateIconIfNeeded()
             await loadCars()
         } catch {
@@ -362,10 +363,11 @@ struct AddMyCarView: View {
                 // 새 이미지가 선택된 경우 업로드
                 if let image = carImage,
                    let imageData = image.jpegDataUnder(maxDimension: 1600, maxBytes: 2_500_000) {
-                    let path = "\(session.user.id.uuidString)/\(car.id).jpg"
+                    // RLS 정책의 auth.uid()::text 가 소문자이므로 path 도 소문자로 통일
+                    let path = "\(session.user.id.uuidString.lowercased())/\(car.id).jpg"
                     try await supabase.storage
                         .from("my-cars")
-                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg", upsert: true))
+                        .upload(path, data: imageData, options: .init(contentType: "image/jpeg", upsert: true))
                     imageUrl = try supabase.storage
                         .from("my-cars")
                         .getPublicURL(path: path).absoluteString
@@ -402,10 +404,11 @@ struct AddMyCarView: View {
                 // 차량 사진 업로드 — 긴 변 1600px / 2.5MB 이하로 최적화
                 if let image = carImage,
                    let imageData = image.jpegDataUnder(maxDimension: 1600, maxBytes: 2_500_000) {
-                    let path = "\(session.user.id.uuidString)/\(carId).jpg"
+                    // RLS 정책의 auth.uid()::text 가 소문자이므로 path 도 소문자로 통일
+                    let path = "\(session.user.id.uuidString.lowercased())/\(carId).jpg"
                     try await supabase.storage
                         .from("my-cars")
-                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg", upsert: true))
+                        .upload(path, data: imageData, options: .init(contentType: "image/jpeg", upsert: true))
                     imageUrl = try supabase.storage
                         .from("my-cars")
                         .getPublicURL(path: path).absoluteString

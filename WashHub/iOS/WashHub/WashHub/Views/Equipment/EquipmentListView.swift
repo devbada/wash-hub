@@ -1084,15 +1084,19 @@ struct EditEquipmentView: View {
         Task {
             do {
                 // 1. 새 이미지 + 200px 썸네일 업로드 (변경된 경우)
+                // path 는 '{userId}/{equipmentId}.jpg' 로 통일 (Storage RLS 검증용)
+                // RLS 정책의 auth.uid()::text 가 소문자이므로 path 도 소문자로 통일
+                let session = try await supabase.auth.session
+                let userId = session.user.id.uuidString.lowercased()
                 var imageUrlString: String? = imageChanged ? nil : equipment.imageUrl
                 var thumbnailUrlString: String? = imageChanged ? nil : equipment.thumbnailUrl
                 if imageChanged, let image = selectedImage,
                    let imageData = image.jpegDataUnder(maxDimension: 1024, maxBytes: 2 * 1024 * 1024) {
-                    let path = "equipments/\(equipment.id).jpg"
+                    let path = "\(userId)/\(equipment.id).jpg"
                     // upsert: 기존 파일 덮어쓰기
                     try await supabase.storage
                         .from("equipments")
-                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg", upsert: true))
+                        .upload(path, data: imageData, options: .init(contentType: "image/jpeg", upsert: true))
                     let publicUrl = try supabase.storage
                         .from("equipments")
                         .getPublicURL(path: path)
@@ -1102,11 +1106,11 @@ struct EditEquipmentView: View {
 
                     // 썸네일도 함께 갱신 (실패해도 풀이미지로 fallback)
                     if let thumbData = image.thumbnailJpegData() {
-                        let thumbPath = "equipments/\(equipment.id)_thumb.jpg"
+                        let thumbPath = "\(userId)/\(equipment.id)_thumb.jpg"
                         do {
                             try await supabase.storage
                                 .from("equipments")
-                                .upload(path: thumbPath, file: thumbData, options: .init(contentType: "image/jpeg", upsert: true))
+                                .upload(thumbPath, data: thumbData, options: .init(contentType: "image/jpeg", upsert: true))
                             let thumbUrl = try supabase.storage.from("equipments").getPublicURL(path: thumbPath)
                             thumbnailUrlString = thumbUrl.absoluteString + "?t=\(timestamp)"
                         } catch {
@@ -1317,14 +1321,17 @@ struct AddEquipmentView: View {
                 let equipmentId = UUID().uuidString
 
                 // 1. 이미지 + 200px 썸네일 업로드 (선택 시)
+                // path 는 '{userId}/{equipmentId}.jpg' 로 통일 (Storage RLS 검증용)
+                // RLS 정책의 auth.uid()::text 가 소문자이므로 path 도 소문자로 통일
                 var imageUrlString: String?
                 var thumbnailUrlString: String?
+                let userId = session.user.id.uuidString.lowercased()
                 if let image = selectedImage,
                    let imageData = image.jpegDataUnder(maxDimension: 1024, maxBytes: 2 * 1024 * 1024) {
-                    let path = "equipments/\(equipmentId).jpg"
+                    let path = "\(userId)/\(equipmentId).jpg"
                     try await supabase.storage
                         .from("equipments")
-                        .upload(path: path, file: imageData, options: .init(contentType: "image/jpeg"))
+                        .upload(path, data: imageData, options: .init(contentType: "image/jpeg"))
                     let publicUrl = try supabase.storage
                         .from("equipments")
                         .getPublicURL(path: path)
@@ -1332,11 +1339,11 @@ struct AddEquipmentView: View {
 
                     // 썸네일 — 실패해도 풀이미지로 fallback 되므로 전체 업로드는 throw 하지 않음
                     if let thumbData = image.thumbnailJpegData() {
-                        let thumbPath = "equipments/\(equipmentId)_thumb.jpg"
+                        let thumbPath = "\(userId)/\(equipmentId)_thumb.jpg"
                         do {
                             try await supabase.storage
                                 .from("equipments")
-                                .upload(path: thumbPath, file: thumbData, options: .init(contentType: "image/jpeg"))
+                                .upload(thumbPath, data: thumbData, options: .init(contentType: "image/jpeg"))
                             let thumbUrl = try supabase.storage.from("equipments").getPublicURL(path: thumbPath)
                             thumbnailUrlString = thumbUrl.absoluteString
                         } catch {

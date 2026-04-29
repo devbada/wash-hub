@@ -209,7 +209,7 @@ struct FeedDetailView: View {
                 presentationMode.wrappedValue.dismiss()
             }
         }
-        .onChange(of: isCommentFocused) { focused in
+        .onChange(of: isCommentFocused) { _, focused in
             withAnimation(.easeInOut(duration: 0.3)) {
                 uiState.hideBottomUI = focused
             }

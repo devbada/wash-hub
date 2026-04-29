@@ -55,21 +55,15 @@ struct NotificationListView: View {
             }
         }
         // 프로그래밍 방식 네비게이션 — 알림 탭 시 피드 상세로 이동
-        .background(
-            NavigationLink(
-                destination: Group {
-                    if let feedId = navigatedFeedId {
-                        FeedDetailView(feedId: feedId)
-                            .environmentObject(authManager)
-                    }
-                },
-                isActive: Binding(
-                    get: { navigatedFeedId != nil },
-                    set: { if !$0 { navigatedFeedId = nil } }
-                )
-            ) { EmptyView() }
-            .hidden()
-        )
+        .navigationDestination(isPresented: Binding(
+            get: { navigatedFeedId != nil },
+            set: { if !$0 { navigatedFeedId = nil } }
+        )) {
+            if let feedId = navigatedFeedId {
+                FeedDetailView(feedId: feedId)
+                    .environmentObject(authManager)
+            }
+        }
         .navigationTitle("알림")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

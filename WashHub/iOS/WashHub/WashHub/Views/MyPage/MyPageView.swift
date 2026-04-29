@@ -3,6 +3,7 @@ import Supabase
 
 struct MyPageView: View {
     @EnvironmentObject var authManager: AuthManager
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var feedService = FeedService()
     @StateObject private var badgeService = BadgeService()
     @State private var myFeeds: [Feed] = []
@@ -58,34 +59,23 @@ struct MyPageView: View {
             EditProfileView()
                 .environmentObject(authManager)
         }
-        // NavigationView 호환 — 숨겨진 NavigationLink로 프로그래밍 방식 이동
-        .background(
-            Group {
-                NavigationLink(
-                    destination: BadgeCollectionView().environmentObject(authManager),
-                    isActive: $showBadgeCollection
-                ) { EmptyView() }
-
-                NavigationLink(
-                    destination: FollowListView(
-                        userId: authManager.currentUser?.id ?? "",
-                        userName: authManager.currentUser?.displayName ?? "사용자",
-                        selectedTab: followListTab
-                    ).environmentObject(authManager),
-                    isActive: $showFollowList
-                ) { EmptyView() }
-
-                NavigationLink(
-                    destination: FollowingFeedView().environmentObject(authManager),
-                    isActive: $showFollowingFeed
-                ) { EmptyView() }
-
-                NavigationLink(
-                    destination: BlockedUsersListView(),
-                    isActive: $showBlockedUsers
-                ) { EmptyView() }
-            }
-        )
+        // NavigationStack 기반 프로그래밍 이동 — isPresented 바인딩만으로 push
+        .navigationDestination(isPresented: $showBadgeCollection) {
+            BadgeCollectionView().environmentObject(authManager)
+        }
+        .navigationDestination(isPresented: $showFollowList) {
+            FollowListView(
+                userId: authManager.currentUser?.id ?? "",
+                userName: authManager.currentUser?.displayName ?? "사용자",
+                selectedTab: followListTab
+            ).environmentObject(authManager)
+        }
+        .navigationDestination(isPresented: $showFollowingFeed) {
+            FollowingFeedView().environmentObject(authManager)
+        }
+        .navigationDestination(isPresented: $showBlockedUsers) {
+            BlockedUsersListView()
+        }
         .overlay(alignment: .top) {
             if showBadgeToast {
                 badgeToastView
@@ -116,6 +106,16 @@ struct MyPageView: View {
             await badgeService.loadMyBadges(userId: userId)
         }
         isLoading = false
+    }
+
+    /// 도움말 다시 보기 — 마이페이지를 닫고 HomeTabView 가 활성화된 후 코치마크 강제 시작
+    private func replayCoachmark() {
+        dismiss()
+        Task { @MainActor in
+            // 마이페이지 pop 애니메이션 + HomeTabView anchor 좌표 갱신 시간 확보
+            try? await Task.sleep(nanoseconds: 700_000_000) // 0.7s
+            CoachmarkController.shared.forceStart(steps: HomeCoachmark.v1Steps)
+        }
     }
 
     private func checkBadges() async {
@@ -159,7 +159,7 @@ struct MyPageView: View {
 
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)")
                 .in("id", values: feedIds)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: false)
@@ -489,6 +489,20 @@ struct MyPageView: View {
     // MARK: - 설정
     private var settingsSection: some View {
         VStack(spacing: 8) {
+            // 도움말 다시 보기 — 첫 사용자 코치마크 강제 재실행
+            Button(action: replayCoachmark) {
+                HStack {
+                    Text("도움말 다시 보기")
+                        .font(.appBody)
+                        .foregroundColor(.theme.textSecondary)
+                    Spacer()
+                    Image(systemName: "questionmark.circle")
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .padding(16)
+                .cardStyle()
+            }
+
             // 차단 관리
             Button(action: { showBlockedUsers = true }) {
                 HStack {
@@ -790,7 +804,8 @@ struct EditProfileView: View {
                 }
 
                 let session = try await supabase.auth.session
-                let userId = session.user.id.uuidString
+                // RLS 정책의 auth.uid()::text 가 소문자이므로 path 도 소문자로 통일
+                let userId = session.user.id.uuidString.lowercased()
 
                 // 2. 아바타 업로드 (선택된 경우)
                 // profiles 버킷 재사용 — 본인 폴더(`{userId}/`) 하위에만 업로드 허용 (RLS)
@@ -815,8 +830,8 @@ struct EditProfileView: View {
                     try await supabase.storage
                         .from("profiles")
                         .upload(
-                            path: path,
-                            file: imageData,
+                            path,
+                            data: imageData,
                             options: .init(contentType: "image/jpeg", upsert: true)
                         )
                     avatarUrl = try supabase.storage

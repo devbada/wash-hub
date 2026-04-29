@@ -132,9 +132,15 @@ struct RoutineDetailView: View {
                     Text("Author")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.theme.textSecondary)
-                    Text(routine.profiles?.displayName ?? "사용자")
-                        .font(.appBodyBold)
-                        .foregroundColor(.theme.textPrimary)
+                    HStack(spacing: 4) {
+                        Text(routine.profiles?.displayName ?? "사용자")
+                            .font(.appBodyBold)
+                            .foregroundColor(.theme.textPrimary)
+                        // 공식 계정 배지 (WashHub / 검증 사용자)
+                        if routine.profiles?.isOfficialAccount == true {
+                            OfficialBadge(size: 14)
+                        }
+                    }
                 }
 
                 Spacer()

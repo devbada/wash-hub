@@ -98,7 +98,7 @@ struct ReportSheet: View {
                                 .onAppear {
                                     UITextView.appearance().backgroundColor = .clear
                                 }
-                                .onChange(of: description) { newValue in
+                                .onChange(of: description) { _, newValue in
                                     if newValue.count > 500 {
                                         description = String(newValue.prefix(500))
                                     }

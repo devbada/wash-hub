@@ -150,7 +150,7 @@ final class FollowService: ObservableObject {
             // 2) 팔로우한 사용자들의 피드 조회
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)")
                 .eq("status", value: "ACTIVE")
                 .in("user_id", values: followingIds)
                 .order("created_at", ascending: false)
@@ -170,7 +170,7 @@ final class FollowService: ObservableObject {
         do {
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)")
                 .eq("status", value: "ACTIVE")
                 .eq("user_id", value: userId)
                 .order("created_at", ascending: false)

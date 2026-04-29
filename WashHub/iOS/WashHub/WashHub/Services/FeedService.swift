@@ -11,7 +11,7 @@ final class FeedService: ObservableObject {
 
     private let pageSize = 10
 
-    private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url), my_cars(id, car_model, car_color, car_year, nickname)"
+    private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)"
 
     // MARK: - 캐시 (첫 페이지만 60초 — pagination 결과는 캐싱 안 함)
     // @StateObject 가 매 뷰마다 인스턴스를 만들기 때문에 static 으로 인스턴스 간 공유한다
@@ -168,10 +168,10 @@ final class FeedService: ObservableObject {
         var beforeFirstThumbnailSource: Data?  // BEFORE fallback
         var extraFirstThumbnailSource: Data?   // EXTRA fallback
         for (index, image) in beforeImages.enumerated() {
-            let path = "\(feedId)/before/\(index).jpg"
+            let path = "\(session.user.id.uuidString.lowercased())/\(feedId)/before/\(index).jpg"
             try await supabase.storage
                 .from("feeds")
-                .upload(path: path, file: image.data, options: .init(contentType: "image/jpeg"))
+                .upload(path, data: image.data, options: .init(contentType: "image/jpeg"))
 
             let publicUrl = try supabase.storage
                 .from("feeds")
@@ -196,10 +196,10 @@ final class FeedService: ObservableObject {
 
         // 3. After 이미지 업로드 및 레코드 생성
         for (index, image) in afterImages.enumerated() {
-            let path = "\(feedId)/after/\(index).jpg"
+            let path = "\(session.user.id.uuidString.lowercased())/\(feedId)/after/\(index).jpg"
             try await supabase.storage
                 .from("feeds")
-                .upload(path: path, file: image.data, options: .init(contentType: "image/jpeg"))
+                .upload(path, data: image.data, options: .init(contentType: "image/jpeg"))
 
             let publicUrl = try supabase.storage
                 .from("feeds")
@@ -225,10 +225,10 @@ final class FeedService: ObservableObject {
 
         // 4. Extra 이미지 업로드 및 레코드 생성
         for (index, image) in extraImages.enumerated() {
-            let path = "\(feedId)/extra/\(index).jpg"
+            let path = "\(session.user.id.uuidString.lowercased())/\(feedId)/extra/\(index).jpg"
             try await supabase.storage
                 .from("feeds")
-                .upload(path: path, file: image.data, options: .init(contentType: "image/jpeg"))
+                .upload(path, data: image.data, options: .init(contentType: "image/jpeg"))
 
             let publicUrl = try supabase.storage
                 .from("feeds")
@@ -282,11 +282,11 @@ final class FeedService: ObservableObject {
         if let sourceData = chosenSource,
            let sourceImage = UIImage(data: sourceData),
            let thumbData = sourceImage.thumbnailJpegData() {
-            let thumbPath = "\(feedId)/thumbnail.jpg"
+            let thumbPath = "\(session.user.id.uuidString.lowercased())/\(feedId)/thumbnail.jpg"
             do {
                 try await supabase.storage
                     .from("feeds")
-                    .upload(path: thumbPath, file: thumbData, options: .init(contentType: "image/jpeg", upsert: true))
+                    .upload(thumbPath, data: thumbData, options: .init(contentType: "image/jpeg", upsert: true))
                 let publicUrl = try supabase.storage.from("feeds").getPublicURL(path: thumbPath)
                 thumbnailUrl = publicUrl.absoluteString
             } catch {
@@ -358,7 +358,7 @@ final class FeedService: ObservableObject {
                     .execute()
 
                 // 캐시를 새 세차일로 즉시 갱신 → updateIconIfNeeded()는 DB 재조회 없이 바로 반영
-                await DynamicIconService.shared.recordWashDate(now, userId: session.user.id.uuidString)
+                DynamicIconService.shared.recordWashDate(now, userId: session.user.id.uuidString)
                 // 세차 기록 생성 → 앱 아이콘 즉시 업데이트 (Just Washed: 깨끗한 상태)
                 await DynamicIconService.shared.updateIconIfNeeded()
             } catch {
@@ -419,7 +419,7 @@ final class FeedService: ObservableObject {
                 .eq("feed_id", value: id)
                 .execute()
             // 마지막 세차 기록이 영향받을 수 있으므로 아이콘 캐시도 무효화
-            await DynamicIconService.shared.invalidateWashLogCache()
+            DynamicIconService.shared.invalidateWashLogCache()
         } catch {
             // TODO-minam: 피드 삭제는 성공했으나 wash_log 삭제 실패 시 로그 분석
             print("⚠️ wash_log 연동 삭제 실패: \(error)")

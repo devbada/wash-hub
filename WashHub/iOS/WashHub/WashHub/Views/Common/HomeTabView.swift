@@ -4,6 +4,7 @@ struct HomeTabView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @ObservedObject private var uiState = AppUIState.shared
+    @ObservedObject private var coachmark = CoachmarkController.shared
     @State private var selectedTab = 0
     @State private var showLoginAlert = false
     @State private var showCreateFeed = false
@@ -14,24 +15,44 @@ struct HomeTabView: View {
     }
 
     var body: some View {
-        Group {
-            if isWideLayout {
-                iPadLayout
-            } else {
-                iPhoneLayout
+        ZStack {
+            Group {
+                if isWideLayout {
+                    iPadLayout
+                } else {
+                    iPhoneLayout
+                }
             }
-        }
-        .sheet(isPresented: $showCreateFeed) {
-            CreateFeedView()
-                .environmentObject(authManager)
-        }
-        .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
-            Button("로그인하기") {
-                authManager.exitGuestMode()
+            .sheet(isPresented: $showCreateFeed) {
+                CreateFeedView()
+                    .environmentObject(authManager)
             }
-            Button("계속 둘러보기", role: .cancel) {}
-        } message: {
-            Text("이 기능을 사용하려면 로그인이 필요합니다.\n간편하게 Google로 시작해보세요!")
+            .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
+                Button("로그인하기") {
+                    authManager.exitGuestMode()
+                }
+                Button("계속 둘러보기", role: .cancel) {}
+            } message: {
+                Text("이 기능을 사용하려면 로그인이 필요합니다.\n소셜 로그인으로 간편하게 가입하고 사용해보세요!")
+            }
+            .collectCoachmarkAnchors(coachmark)
+            .onAppear { triggerCoachmarkIfNeeded() }
+
+            // 코치마크 오버레이 — 최상단
+            CoachmarkOverlay(controller: coachmark)
+        }
+    }
+
+    /// 첫 진입 시 코치마크 자동 시작 — anchor 좌표 등록 시간을 위해 약간 대기
+    private func triggerCoachmarkIfNeeded() {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000) // 0.6s
+            // sheet/alert 가 떠 있으면 진행하지 않음
+            guard !showCreateFeed, !showLoginAlert else { return }
+            coachmark.startIfNeeded(
+                version: CoachmarkVersion.homeV1,
+                steps: HomeCoachmark.v1Steps
+            )
         }
     }
 
@@ -99,13 +120,17 @@ struct HomeTabView: View {
     private var customTabBar: some View {
         HStack(spacing: 0) {
             tabButton(icon: "photo.stack", filledIcon: "photo.stack.fill", tag: 0)
+                .coachmarkAnchor(CoachmarkAnchorID.tabFeed)
             tabButton(icon: "list.bullet.clipboard", filledIcon: "list.bullet.clipboard.fill", tag: 2)
+                .coachmarkAnchor(CoachmarkAnchorID.tabRoutine)
 
             // 가운데 FAB 공간
             Spacer().frame(width: 96)
 
             tabButton(icon: "drop.circle", filledIcon: "drop.circle.fill", tag: 3)
+                .coachmarkAnchor(CoachmarkAnchorID.tabEquipment)
             tabButton(icon: "car", filledIcon: "car.fill", tag: 4)
+                .coachmarkAnchor(CoachmarkAnchorID.tabMyCar)
         }
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
@@ -182,6 +207,7 @@ struct HomeTabView: View {
             }
         }
         .buttonStyle(FABPressStyle())
+        .coachmarkAnchor(CoachmarkAnchorID.fabCreate)
     }
 
     private func handleCreateTap() {

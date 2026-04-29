@@ -306,7 +306,7 @@ struct UserProfileView: View {
 
         // 뱃지 로드
         await badgeService.loadAllBadges()
-        await badgeService.loadUserBadges(userId: userId)
+        _ = await badgeService.loadUserBadges(userId: userId)
 
         // 피드 로드
         userFeeds = await followService.loadUserFeed(userId: userId)

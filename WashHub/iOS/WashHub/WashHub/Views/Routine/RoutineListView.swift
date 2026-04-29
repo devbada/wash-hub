@@ -133,6 +133,11 @@ struct RoutineCard: View {
                     .font(.system(size: 11, weight: .bold))
                     .tracking(1)
                     .foregroundColor(.theme.textSecondary)
+
+                // 공식 계정 배지 (WashHub / 검증 사용자)
+                if routine.profiles?.isOfficialAccount == true {
+                    OfficialBadge(size: 11)
+                }
             }
 
             // 메타 정보: 난이도 + 소요시간 + 따라하기

@@ -15,7 +15,7 @@ struct FeedListView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color.theme.surface
                     .ignoresSafeArea()
@@ -23,9 +23,12 @@ struct FeedListView: View {
                 VStack(spacing: 0) {
                     // 커스텀 헤더 (navigationBar 대체)
                     HStack(alignment: .center) {
-                        Text("WashHub")
-                            .font(.headline(24))
-                            .foregroundColor(.theme.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("WashHub")
+                                .font(.headline(24))
+                                .foregroundColor(.theme.secondary)
+                            BetaBadge()
+                        }
 
                         Spacer()
 
@@ -138,23 +141,16 @@ struct FeedListView: View {
                 }
             }
             // 프로그래밍 방식 네비게이션 — iPad에서 인라인 NavigationLink 터치 이슈 우회
-            .background(
-                NavigationLink(
-                    destination: Group {
-                        if let feedId = navigatedFeedId {
-                            FeedDetailView(feedId: feedId)
-                        }
-                    },
-                    isActive: Binding(
-                        get: { navigatedFeedId != nil },
-                        set: { if !$0 { navigatedFeedId = nil } }
-                    )
-                ) { EmptyView() }
-                .hidden()
-            )
+            .navigationDestination(isPresented: Binding(
+                get: { navigatedFeedId != nil },
+                set: { if !$0 { navigatedFeedId = nil } }
+            )) {
+                if let feedId = navigatedFeedId {
+                    FeedDetailView(feedId: feedId)
+                }
+            }
             .navigationBarHidden(true)
         }
-        .navigationViewStyle(.stack)
         .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
             Button("로그인하기") {
                 authManager.exitGuestMode()
@@ -171,7 +167,7 @@ struct FeedListView: View {
                 await notificationService.fetchUnreadCount()
             }
         }
-        .onChange(of: loadId) { _ in
+        .onChange(of: loadId) { _, _ in
             // loadId 변경 시 새로고침 (pull-to-refresh, 버튼, 알림 등)
             Task {
                 await blockService.loadBlockedIds()

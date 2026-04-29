@@ -39,7 +39,7 @@ struct WashStatsView: View {
         .navigationTitle("세차 통계")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadStats() }
-        .onChange(of: selectedYear) { _ in
+        .onChange(of: selectedYear) { _, _ in
             Task { await loadStats() }
         }
     }

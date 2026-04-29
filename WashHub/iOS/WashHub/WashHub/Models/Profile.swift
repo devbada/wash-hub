@@ -15,6 +15,8 @@ struct Profile: Identifiable, Codable {
     let agreedTermsAt: String?
     let createdAt: String?
     let updatedAt: String?
+    /// 공식 계정 여부 — WashHub 공식 / 협력사 / 검증 사용자 표시용. legacy 데이터는 nil → false 처리
+    let isOfficial: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -31,10 +33,16 @@ struct Profile: Identifiable, Codable {
         case agreedTermsAt = "agreed_terms_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case isOfficial = "is_official"
     }
 
     /// 표시용 닉네임 (닉네임 미설정 시 "사용자")
     var displayName: String {
         nickname ?? "사용자"
+    }
+
+    /// 공식 계정 여부 — nil safety 헬퍼
+    var isOfficialAccount: Bool {
+        isOfficial ?? false
     }
 }

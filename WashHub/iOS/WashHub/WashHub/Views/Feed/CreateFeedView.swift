@@ -332,16 +332,16 @@ struct CreateFeedView: View {
                 applyPrefillIfNeeded()
                 refreshHashtagSuggestions()
             }
-            .onChange(of: activePickerType) { newValue in
+            .onChange(of: activePickerType) { _, newValue in
                 if newValue != nil {
                     showImageSourcePicker = true
                 }
             }
             // 본문/세차방식 — 타이핑 중 키스트로크마다 호출되므로 디바운스(400ms)로 입력 끊김 방지
-            .onChange(of: content) { _ in scheduleHashtagRefresh() }
-            .onChange(of: washMethod) { _ in scheduleHashtagRefresh() }
+            .onChange(of: content) { _, _ in scheduleHashtagRefresh() }
+            .onChange(of: washMethod) { _, _ in scheduleHashtagRefresh() }
             // 차량 선택은 탭 한 번에 끝나므로 즉시 갱신해도 부담 없음
-            .onChange(of: selectedCarId) { _ in refreshHashtagSuggestions() }
+            .onChange(of: selectedCarId) { _, _ in refreshHashtagSuggestions() }
             // ImageSourcePicker 의 BottomSheetOverlay 가 form 위에 보이도록 overlay 로 부착
             // (background 에 두면 BottomSheet 가 form 뒤로 숨음. confirmationDialog 일 때는 window-level 렌더라 무관했음)
             .overlay(

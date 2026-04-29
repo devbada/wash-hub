@@ -171,10 +171,10 @@ final class AuthManager: ObservableObject {
 
     /// Auth 세션에서 최소한의 임시 Profile을 구성 (profiles 행 미존재 시 방어)
     private func buildFallbackProfile(userId: String) -> Profile {
-        // auth session에서 메타데이터 추출 시도
+        // auth session에서 메타데이터 추출 시도 (currentSession 은 throwing 아님)
         var email: String? = nil
         var avatarUrl: String? = nil
-        if let session = try? supabase.auth.currentSession {
+        if let session = supabase.auth.currentSession {
             email = session.user.email
             avatarUrl = session.user.userMetadata["avatar_url"]?.stringValue
                 ?? session.user.userMetadata["picture"]?.stringValue
@@ -193,7 +193,8 @@ final class AuthManager: ObservableObject {
             titleBadgeId: nil,
             agreedTermsAt: nil,
             createdAt: nil,
-            updatedAt: nil
+            updatedAt: nil,
+            isOfficial: false  // fallback 계정은 비공식
         )
     }
 
@@ -267,7 +268,8 @@ final class AuthManager: ObservableObject {
         currentUser = nil
         needsNicknameSetup = false
         // 다른 사용자가 로그인할 때 이전 사용자의 세차 기록이 캐시에서 보이지 않도록 무효화
-        await DynamicIconService.shared.invalidateWashLogCache()
+        // (DynamicIconService 도 @MainActor 라 동일 컨텍스트 → await 불필요)
+        DynamicIconService.shared.invalidateWashLogCache()
     }
 
     // MARK: - 회원 탈퇴
