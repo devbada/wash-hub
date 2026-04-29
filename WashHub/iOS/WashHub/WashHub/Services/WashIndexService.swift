@@ -43,6 +43,10 @@ final class WashIndexService: ObservableObject {
             return
         }
 
+        // 2) 캐시 miss → 새 데이터 fetch. 정합성을 위해 forecast 캐시도 동시 무효화
+        // (두 캐시 만료 시점이 어긋나면 카드 점수 vs 7일 예보 점수가 불일치할 수 있음)
+        Self.forecastCache.invalidate(for: key)
+
         isLoading = true
 
         do {
@@ -110,6 +114,9 @@ final class WashIndexService: ObservableObject {
             isForecastLoading = false
             return
         }
+
+        // 2) 캐시 miss → 새 데이터 fetch. washIndex 캐시도 동시 무효화 (정합성)
+        Self.washIndexCache.invalidate(for: key)
 
         isForecastLoading = true
 

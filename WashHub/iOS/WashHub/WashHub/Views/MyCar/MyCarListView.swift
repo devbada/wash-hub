@@ -22,11 +22,19 @@ struct MyCarListView: View {
                 }
             }
             .navigationTitle("내차")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // 좌측: 세차 통계 진입 — 우측 + 추가 버튼은 가운데 FAB 로 통합되어 제거됨
+                // 좌측: 세차 통계 진입
                 ToolbarItem(placement: .navigationBarLeading) {
                     NavigationLink(destination: WashStatsView()) {
                         Image(systemName: "chart.bar.fill")
+                            .foregroundColor(.theme.secondary)
+                    }
+                }
+                // 우측: 차량 추가
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showAddCar = true }) {
+                        Image(systemName: "plus")
                             .foregroundColor(.theme.secondary)
                     }
                 }
@@ -37,10 +45,6 @@ struct MyCarListView: View {
         }
         .navigationViewStyle(.stack)
         .task { await loadCars() }
-        // 가운데 FAB → 내차 추가 요청 — HomeTabView 가 게스트 체크 후 broadcast
-        .onReceive(NotificationCenter.default.publisher(for: .requestMyCarCreate)) { _ in
-            showAddCar = true
-        }
     }
 
     @State private var editingCar: MyCar?
@@ -69,8 +73,12 @@ struct MyCarListView: View {
                         }
                     }
                 }
+
+                // 마지막 카드가 탭바 overlay 뒤에 가리지 않도록 spacer
+                Color.clear.frame(height: 80)
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
         }
         .sheet(item: $editingCar) { car in
             AddMyCarView(editCar: car) { await loadCars() }

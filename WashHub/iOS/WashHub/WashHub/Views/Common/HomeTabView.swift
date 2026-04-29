@@ -240,17 +240,9 @@ struct HomeTabView: View {
             showLoginAlert = true
             return
         }
-        // 활성 탭에 따라 FAB 동작 분기
-        switch selectedTab {
-        case 2:  // 루틴 탭 — 루틴 추가
-            NotificationCenter.default.post(name: .requestRoutineCreate, object: nil)
-        case 3:  // 케미컬 탭 — 케미컬 추가
-            NotificationCenter.default.post(name: .requestEquipmentCreate, object: nil)
-        case 4:  // 내차 탭 — 내차 추가
-            NotificationCenter.default.post(name: .requestMyCarCreate, object: nil)
-        default: // 피드 — 피드 작성
-            showCreateFeed = true
-        }
+        // 가운데 FAB = 핵심 액션(피드 작성) — 탭과 무관하게 항상 동일 동작
+        // 루틴/케미컬/내차 추가는 각 화면의 우측 상단 + 버튼으로 분리됨
+        showCreateFeed = true
     }
 }
 

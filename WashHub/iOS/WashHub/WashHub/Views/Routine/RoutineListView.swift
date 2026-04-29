@@ -70,8 +70,12 @@ struct RoutineListView: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
+
+                                    // 마지막 카드가 탭바 overlay 뒤에 가리지 않도록 spacer
+                                    Color.clear.frame(height: 80)
                                 }
-                                .padding(16)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
                             }
                             // 스크롤 시 키보드 즉시 닫힘
                             .scrollDismissesKeyboard(.immediately)
@@ -90,6 +94,18 @@ struct RoutineListView: View {
                 }
             }
             .navigationTitle("루틴")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        if authManager.isGuest { showLoginAlert = true }
+                        else { showCreateRoutine = true }
+                    }) {
+                        Image(systemName: "plus")
+                            .foregroundColor(.theme.secondary)
+                    }
+                }
+            }
             .sheet(isPresented: $showCreateRoutine) {
                 CreateRoutineView {
                     await routineService.loadRoutines()
@@ -105,10 +121,6 @@ struct RoutineListView: View {
         .navigationViewStyle(.stack)
         .task {
             await routineService.loadRoutines()
-        }
-        // 가운데 FAB → 루틴 추가 요청 — HomeTabView 가 게스트 체크 후 broadcast
-        .onReceive(NotificationCenter.default.publisher(for: .requestRoutineCreate)) { _ in
-            showCreateRoutine = true
         }
         // 루틴 완료 알림 수신 시 카운트(따라했어요) 즉시 갱신
         .onReceive(NotificationCenter.default.publisher(for: .routineCompleted)) { _ in

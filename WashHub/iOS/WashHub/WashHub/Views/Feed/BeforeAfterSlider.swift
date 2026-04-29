@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BeforeAfterSlider: View {
     let beforeImages: [FeedImage]
@@ -13,6 +14,18 @@ struct BeforeAfterSlider: View {
     private var containerAspectRatio: CGFloat {
         let primary = afterImages.first?.aspectRatio ?? beforeImages.first?.aspectRatio
         return primary ?? (4.0 / 5.0)  // 4:5 portrait fallback
+    }
+
+    /// 이미지 영역 최대 높이 — 화면 세로의 70%
+    /// - iPad 가로처럼 폭이 매우 넓을 때 세로 사진 높이가 같이 커지는 문제 방지
+    /// - aspectRatio 는 그대로 유지(가로/세로 사진 모두 비율 보존)
+    /// - iPhone 세로처럼 폭이 좁을 때는 maxHeight 에 도달하지 않아 기존 동작 그대로
+    private var maxImageHeight: CGFloat {
+        // window scene 의 실제 화면 — iPad split view 등 multi-window 도 안전하게
+        let screenHeight = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.screen.bounds.height }
+            .max() ?? UIScreen.main.bounds.height
+        return screenHeight * 0.7
     }
 
     var body: some View {
@@ -42,6 +55,7 @@ struct BeforeAfterSlider: View {
             }
         }
         .aspectRatio(4.0/5.0, contentMode: .fit)
+        .frame(maxHeight: maxImageHeight)
     }
 
     // MARK: - 한쪽만 있을 때
@@ -115,6 +129,7 @@ struct BeforeAfterSlider: View {
             }
         }
         .aspectRatio(containerAspectRatio, contentMode: .fit)
+        .frame(maxHeight: maxImageHeight)
     }
 
     // MARK: - 슬라이더 (양쪽 다 있을 때)
@@ -212,6 +227,7 @@ struct BeforeAfterSlider: View {
             )
         }
         .aspectRatio(containerAspectRatio, contentMode: .fit)
+        .frame(maxHeight: maxImageHeight)
         .contentShape(Rectangle())
     }
 

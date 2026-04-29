@@ -30,19 +30,20 @@ struct EquipmentListView: View {
                 Color.theme.surface.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // 검색바
-                    HStack {
+                    // 검색바 — Stitch: rounded-xl, surfaceHigh bg (RoutineListView 와 동일)
+                    HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(.theme.textDisabled)
-                        TextField("케미컬/장비 검색", text: $searchText)
+                            .foregroundColor(.theme.textSecondary)
+                        TextField("케미컬 검색...", text: $searchText)
                             .font(.appBody)
                             .foregroundColor(.theme.textPrimary)
                     }
-                    .padding(12)
-                    .background(Color.theme.surface)
-                    .cornerRadius(12)
+                    .padding(14)
+                    .background(Color.theme.surfaceHigh)
+                    .cornerRadius(16)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
+                    .padding(.bottom, 4)
 
                     // 카테고리 필터
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -93,8 +94,12 @@ struct EquipmentListView: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
+
+                                    // 마지막 카드가 탭바 overlay 뒤에 가리지 않도록 spacer
+                                    Color.clear.frame(height: 80)
                                 }
-                                .padding(16)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
                             }
                             // 동일 탭(케미컬=3) 재탭 → 최상단으로 스크롤
                             .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
@@ -108,10 +113,9 @@ struct EquipmentListView: View {
                 }
             }
             .navigationTitle("케미컬")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // 좌측: 세차장 목록 sheet 로 present
-                // (CarWashListView 가 자체 NavigationView 를 갖고 있어서 push 시 NavigationView 중첩 경고 발생)
-                // 우측 + 추가 버튼은 가운데 FAB 로 통합되어 제거됨
+                // 좌측: 세차장 목록 sheet (자체 NavigationView 보유 → push 시 중첩 경고 회피)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { showCarWashList = true }) {
                         HStack(spacing: 4) {
@@ -120,6 +124,16 @@ struct EquipmentListView: View {
                                 .font(.appLabel)
                         }
                         .foregroundColor(.theme.secondary)
+                    }
+                }
+                // 우측: 케미컬 추가
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        if authManager.isGuest { showLoginAlert = true }
+                        else { showAddEquipment = true }
+                    }) {
+                        Image(systemName: "plus")
+                            .foregroundColor(.theme.secondary)
                     }
                 }
             }
@@ -139,10 +153,6 @@ struct EquipmentListView: View {
         }
         .navigationViewStyle(.stack)
         .task { await loadEquipments() }
-        // 가운데 FAB → 케미컬 추가 요청 — HomeTabView 가 게스트 체크 후 broadcast
-        .onReceive(NotificationCenter.default.publisher(for: .requestEquipmentCreate)) { _ in
-            showAddEquipment = true
-        }
     }
 
     /// - Parameter forceRefresh: true면 캐시 무시 (사용자 추가/수정/삭제 후 호출)
