@@ -97,9 +97,9 @@ struct EquipmentListView: View {
             }
             .navigationTitle("케미컬")
             .toolbar {
-                // 좌측: 세차장 목록 sheet 로 present (CarWashListView 가 자체 NavigationView 를 갖고 있어서
-                // push 네비게이션은 NavigationView 중첩 경고가 발생함. sheet 로 모달 표시하는 편이 안전)
-                // TODO-minam: Phase 2 에서 세차장 지도 탭 부활 시 이 버튼은 제거 예정
+                // 좌측: 세차장 목록 sheet 로 present
+                // (CarWashListView 가 자체 NavigationView 를 갖고 있어서 push 시 NavigationView 중첩 경고 발생)
+                // 우측 + 추가 버튼은 가운데 FAB 로 통합되어 제거됨
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { showCarWashList = true }) {
                         HStack(spacing: 4) {
@@ -108,16 +108,6 @@ struct EquipmentListView: View {
                                 .font(.appLabel)
                         }
                         .foregroundColor(.theme.secondary)
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        if authManager.isGuest { showLoginAlert = true }
-                        else { showAddEquipment = true }
-                    }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(.theme.secondary)
                     }
                 }
             }
@@ -137,6 +127,10 @@ struct EquipmentListView: View {
         }
         .navigationViewStyle(.stack)
         .task { await loadEquipments() }
+        // 가운데 FAB → 케미컬 추가 요청 — HomeTabView 가 게스트 체크 후 broadcast
+        .onReceive(NotificationCenter.default.publisher(for: .requestEquipmentCreate)) { _ in
+            showAddEquipment = true
+        }
     }
 
     /// - Parameter forceRefresh: true면 캐시 무시 (사용자 추가/수정/삭제 후 호출)

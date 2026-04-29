@@ -213,7 +213,17 @@ struct HomeTabView: View {
     private func handleCreateTap() {
         if authManager.isGuest {
             showLoginAlert = true
-        } else {
+            return
+        }
+        // 활성 탭에 따라 FAB 동작 분기
+        switch selectedTab {
+        case 2:  // 루틴 탭 — 루틴 추가
+            NotificationCenter.default.post(name: .requestRoutineCreate, object: nil)
+        case 3:  // 케미컬 탭 — 케미컬 추가
+            NotificationCenter.default.post(name: .requestEquipmentCreate, object: nil)
+        case 4:  // 내차 탭 — 내차 추가
+            NotificationCenter.default.post(name: .requestMyCarCreate, object: nil)
+        default: // 피드 — 피드 작성
             showCreateFeed = true
         }
     }

@@ -41,7 +41,7 @@ struct FaceMosaicEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("얼굴 모자이크")
+                    Text("모자이크 편집")
                         .font(.appHeadline3)
                         .foregroundColor(.theme.textPrimary)
                 }
@@ -56,6 +56,17 @@ struct FaceMosaicEditorView: View {
         }
     }
 
+    /// 상단 안내 문구 — 모드별 + 자동 검출 0건일 때 별도 안내
+    private var guidanceText: String {
+        if isDrawMode {
+            return "드래그하여 가릴 영역을 추가하세요"
+        }
+        if detectedFaces.isEmpty {
+            return "가리고 싶은 영역이 있으면 '그리기'로 추가하세요"
+        }
+        return "탭하여 영역의 모자이크 적용을 선택/해제하세요"
+    }
+
     // MARK: - 상단 바 (안내 + 모드 전환)
     private var topBar: some View {
         HStack(spacing: 8) {
@@ -63,7 +74,7 @@ struct FaceMosaicEditorView: View {
                 .font(.system(size: 14))
                 .foregroundColor(isDrawMode ? .theme.tertiary : .theme.secondary)
 
-            Text(isDrawMode ? "드래그하여 모자이크 영역을 추가하세요" : "얼굴을 탭하여 모자이크를 선택/해제하세요")
+            Text(guidanceText)
                 .font(.appCaption)
                 .foregroundColor(.theme.textSecondary)
                 .lineLimit(1)
@@ -252,8 +263,9 @@ struct FaceMosaicEditorView: View {
     // MARK: - 하단 바
     private var bottomBar: some View {
         let selectedCount = detectedFaces.filter { $0.isSelected }.count
-        let autoCount = detectedFaces.filter { !$0.isManual }.count
-        let manualCount = detectedFaces.filter { $0.isManual }.count
+        let faceCount = detectedFaces.filter { $0.kind == .face }.count
+        let plateCount = detectedFaces.filter { $0.kind == .licensePlate }.count
+        let manualCount = detectedFaces.filter { $0.kind == .manual }.count
 
         return VStack(spacing: 12) {
             HStack {
@@ -261,7 +273,7 @@ struct FaceMosaicEditorView: View {
                     Text("\(selectedCount)개 모자이크 적용")
                         .font(.appCaption)
                         .foregroundColor(.theme.textSecondary)
-                    Text("자동 \(autoCount)개 · 수동 \(manualCount)개")
+                    Text("얼굴 \(faceCount) · 번호판 \(plateCount) · 직접 \(manualCount)")
                         .font(.system(size: 11))
                         .foregroundColor(.theme.textDisabled)
                 }

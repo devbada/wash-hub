@@ -117,14 +117,35 @@ struct CarWashListView: View {
                         Spacer()
                     } else if filteredCarWashes.isEmpty {
                         Spacer()
-                        VStack(spacing: 12) {
-                            Image(systemName: "mappin.circle")
-                                .font(.system(size: 50))
-                                .foregroundColor(.theme.textDisabled)
-                            Text("등록된 세차장이 없습니다")
-                                .font(.appCaption)
-                                .foregroundColor(.theme.textDisabled)
+                        VStack(spacing: 16) {
+                            Image(systemName: "star.circle")
+                                .font(.system(size: 56))
+                                .foregroundColor(.theme.secondary.opacity(0.6))
+
+                            VStack(spacing: 6) {
+                                Text("아직 추가한 세차장이 없어요")
+                                    .font(.appBodyBold)
+                                    .foregroundColor(.theme.textPrimary)
+                                Text("지도에서 자주 가는 세차장을\n즐겨찾기에 추가해 보세요.")
+                                    .font(.appCaption)
+                                    .foregroundColor(.theme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                            }
+
+                            Button(action: { showMapView = true }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "map.fill")
+                                    Text("지도에서 찾기")
+                                }
+                                .font(.appLabel)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 10)
+                                .background(Capsule().fill(Color.theme.secondary))
+                            }
+                            .padding(.top, 4)
                         }
+                        .padding(.horizontal, 32)
                         Spacer()
                     } else {
                         ScrollView {

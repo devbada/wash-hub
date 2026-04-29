@@ -139,6 +139,15 @@ extension Notification.Name {
     /// 루틴 따라하기 완료 시 브로드캐스트 — 리스트/디테일 화면에서 usage_count 즉시 갱신
     /// userInfo["routineId"]: String — 완료된 루틴 ID
     static let routineCompleted = Notification.Name("routineCompleted")
+
+    /// 가운데 FAB → 루틴 추가 요청 — RoutineListView 가 자체 추가 sheet 띄움
+    static let requestRoutineCreate = Notification.Name("requestRoutineCreate")
+
+    /// 가운데 FAB → 케미컬 추가 요청 — EquipmentListView 가 자체 추가 sheet 띄움
+    static let requestEquipmentCreate = Notification.Name("requestEquipmentCreate")
+
+    /// 가운데 FAB → 내차 추가 요청 — MyCarListView 가 자체 추가 sheet 띄움
+    static let requestMyCarCreate = Notification.Name("requestMyCarCreate")
 }
 
 /// 세차지수 모델

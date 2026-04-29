@@ -116,14 +116,11 @@ struct RoutineDetailView: View {
 
             // 작성자 바
             HStack(spacing: 12) {
-                AsyncImage(url: URL(string: routine.profiles?.avatarUrl ?? "")) { phase in
-                    switch phase {
-                    case .success(let img): img.resizable().scaledToFill()
-                    default: Circle().fill(Color.theme.surfaceHighest)
-                    }
-                }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
+                ProfileAvatar(
+                    avatarUrl: routine.profiles?.avatarUrl,
+                    isOfficial: routine.profiles?.isOfficialAccount ?? false,
+                    size: 40
+                )
                 .overlay(
                     Circle().stroke(Color.theme.primary.opacity(0.3), lineWidth: 2)
                 )

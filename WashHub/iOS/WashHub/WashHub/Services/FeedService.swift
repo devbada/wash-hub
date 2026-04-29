@@ -8,6 +8,8 @@ final class FeedService: ObservableObject {
     @Published var feeds: [Feed] = []
     @Published var isLoading = false
     @Published var hasMorePages = true
+    /// 현재 로그인 사용자가 좋아요 한 피드 ID 집합 — 카드/상세에서 즉시 빨간 하트 표시용
+    @Published var likedFeedIds: Set<String> = []
 
     private let pageSize = 10
 
@@ -28,17 +30,24 @@ final class FeedService: ObservableObject {
     /// - Parameters:
     ///   - offset: 시작 인덱스 (0 = 첫 페이지)
     ///   - forceRefresh: true면 캐시 무시 (pull-to-refresh 등 사용자 명시적 새로고침)
-    func loadFeeds(offset: Int = 0, forceRefresh: Bool = false) async {
+    ///   - maxCount: 비-nil 이면 해당 개수만 가져오고 더 이상 페이지네이션 안 함
+    ///               (둘러보기 모드 5개 제한 등에 사용)
+    func loadFeeds(offset: Int = 0, forceRefresh: Bool = false, maxCount: Int? = nil) async {
         // 이미 로딩 중이면 중복 호출 방지 (forceRefresh 제외)
         if isLoading && !forceRefresh { return }
         // 추가 페이지 요청인데 더 이상 페이지가 없으면 무시
         if offset > 0 && !hasMorePages { return }
 
+        // 실제 가져올 페이지 크기 결정 — maxCount 가 지정되면 그것 우선
+        let effectivePageSize = maxCount ?? pageSize
+
         // 첫 페이지(offset=0) + 강제새로고침 아닐 때만 캐시 시도
+        // maxCount 가 지정된 경우 캐시는 키가 다르므로 분리 (제한된 결과를 전체 캐시로 오인 방지)
+        let cacheKey = maxCount.map { "\(Self.firstPageCacheKey).max\($0)" } ?? Self.firstPageCacheKey
         if offset == 0 && !forceRefresh,
-           let cached = Self.firstPageCache.value(for: Self.firstPageCacheKey) {
+           let cached = Self.firstPageCache.value(for: cacheKey) {
             feeds = cached
-            hasMorePages = cached.count >= pageSize
+            hasMorePages = (maxCount == nil) && cached.count >= pageSize
             isLoading = false
             return
         }
@@ -53,7 +62,7 @@ final class FeedService: ObservableObject {
                 .select(feedSelect)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: false)
-                .range(from: offset, to: offset + pageSize - 1)
+                .range(from: offset, to: offset + effectivePageSize - 1)
                 .execute()
                 .value
 
@@ -61,28 +70,57 @@ final class FeedService: ObservableObject {
                 try Task.checkCancellation()
             }
 
-            // 서버가 pageSize 미만을 반환하면 마지막 페이지
-            if persistFeeds.count < pageSize {
+            // maxCount 지정된 경우는 더 이상 페이지 없음 처리
+            // 일반 모드는 서버가 pageSize 미만을 반환하면 마지막 페이지
+            if maxCount != nil || persistFeeds.count < pageSize {
                 hasMorePages = false
             }
 
             if offset == 0 {
                 feeds = persistFeeds
-                hasMorePages = persistFeeds.count >= pageSize
+                hasMorePages = (maxCount == nil) && persistFeeds.count >= pageSize
                 // 첫 페이지만 캐싱
-                Self.firstPageCache.set(persistFeeds, for: Self.firstPageCacheKey)
+                Self.firstPageCache.set(persistFeeds, for: cacheKey)
             } else {
                 // 중복 피드 방지: 이미 존재하는 ID 제외
                 let existingIds = Set(feeds.map { $0.id })
                 let newFeeds = persistFeeds.filter { !existingIds.contains($0.id) }
                 feeds.append(contentsOf: newFeeds)
             }
+
+            // 현재 로드된 피드들에 대해 본인의 좋아요 상태 일괄 동기화 (게스트는 skip)
+            await syncLikedFeedIds(for: feeds.map { $0.id })
         } catch is CancellationError {
             print("Feed load cancelled (normal)")
         } catch {
             print("Feed load error: \(error)")
         }
         isLoading = false
+    }
+
+    // MARK: - 좋아요 ID 일괄 동기화
+    /// 주어진 피드 ID 목록에 대해 현재 사용자가 좋아요 한 것들을 한 번의 쿼리로 가져와 캐시에 반영
+    /// - 게스트(미로그인) 일 때는 빈 셋으로 유지
+    /// - 카드/상세에서 빨간 하트 표시 즉시성 확보
+    func syncLikedFeedIds(for feedIds: [String]) async {
+        guard !feedIds.isEmpty else {
+            likedFeedIds = []
+            return
+        }
+        do {
+            let session = try await supabase.auth.session
+            let persistLikes: [FeedLike] = try await supabase
+                .from("feed_likes")
+                .select("feed_id, user_id")
+                .eq("user_id", value: session.user.id.uuidString)
+                .in("feed_id", values: feedIds)
+                .execute()
+                .value
+            likedFeedIds = Set(persistLikes.map { $0.feedId })
+        } catch {
+            // 게스트 또는 세션 없음 — 조용히 무시 (UI 는 회색 하트 fallback)
+            likedFeedIds = []
+        }
     }
 
     // MARK: - 단일 피드 부분 갱신 (목록의 카운터만 동기화)
@@ -449,6 +487,7 @@ final class FeedService: ObservableObject {
                 .from("feed_likes")
                 .insert(["feed_id": feedId, "user_id": userId])
                 .execute()
+            likedFeedIds.insert(feedId)
             return true
         } else {
             // 좋아요 취소
@@ -458,6 +497,7 @@ final class FeedService: ObservableObject {
                 .eq("feed_id", value: feedId)
                 .eq("user_id", value: userId)
                 .execute()
+            likedFeedIds.remove(feedId)
             return false
         }
     }

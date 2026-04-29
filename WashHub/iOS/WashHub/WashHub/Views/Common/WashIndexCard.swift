@@ -194,12 +194,26 @@ struct WashIndexCard: View {
         }
     }
 
+    /// 세차지수 점수 → 5단계 컬러 스펙트럼
+    /// 빨강(나쁨) → 주황 → 노랑 → 라임 → 짙은 Citrus(아주 좋음)
+    /// 디자인 시스템(Carbon & Citrus)의 기조색을 따르되 시각 식별성을 위해 중간톤은 자연색 사용
     private func scoreColor(_ score: Int) -> Color {
         switch score {
-        case 80...100: return .theme.secondary
-        case 60..<80: return .theme.primary
-        case 40..<60: return Color.yellow
-        default: return .theme.error
+        case 90...100:
+            // 매우 좋음 — 짙은 Citrus (브랜드 시그니처)
+            return Color(red: 101/255, green: 163/255, blue: 13/255)   // #65A30D
+        case 75..<90:
+            // 좋음 — 밝은 Citrus
+            return Color(red: 132/255, green: 204/255, blue: 22/255)   // #84CC16
+        case 55..<75:
+            // 보통 — 따뜻한 노랑
+            return Color(red: 234/255, green: 179/255, blue: 8/255)    // #EAB308 (Tailwind yellow-500)
+        case 35..<55:
+            // 별로 — 주황
+            return Color(red: 249/255, green: 115/255, blue: 22/255)   // #F97316 (Tailwind orange-500)
+        default:
+            // 나쁨 — 짙은 빨강 (디자인 시스템 error)
+            return .theme.error                                         // #DC2626
         }
     }
 }

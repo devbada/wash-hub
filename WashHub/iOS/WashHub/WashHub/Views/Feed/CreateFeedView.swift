@@ -890,21 +890,17 @@ struct ImageSourcePicker: View {
                 return
             }
 
-            // 얼굴 감지
-            moderationMessage = "얼굴 감지 중..."
-            let faces = await FaceMosaicService.shared.detectFacesForEditor(in: image)
+            // 얼굴 + 번호판 자동 검출 — 결과 무관하게 항상 편집 화면 진입
+            // 사용자가 직접 가리고 싶은 영역(미인식 사람, 위치 정보 등)을 추가할 수 있도록 함
+            moderationMessage = "민감 영역 감지 중..."
+            let areas = await FaceMosaicService.shared.detectSensitiveAreasForEditor(in: image)
 
             await MainActor.run {
                 showProcessing = false
-                if faces.isEmpty {
-                    // 얼굴 없음 → 바로 통과
-                    onImageReady(image)
-                } else {
-                    // 얼굴 있음 → 편집 화면으로 이동
-                    faceEditorImage = image
-                    detectedFaces = faces
-                    showFaceEditor = true
-                }
+                // 자동 검출 0건이어도 사용자가 수동 모자이크/건너뛰기 결정하도록 항상 편집 화면 진입
+                faceEditorImage = image
+                detectedFaces = areas
+                showFaceEditor = true
             }
         }
     }

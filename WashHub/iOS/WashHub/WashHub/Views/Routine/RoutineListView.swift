@@ -72,17 +72,6 @@ struct RoutineListView: View {
                 }
             }
             .navigationTitle("루틴")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        if authManager.isGuest { showLoginAlert = true }
-                        else { showCreateRoutine = true }
-                    }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(.theme.primary)
-                    }
-                }
-            }
             .sheet(isPresented: $showCreateRoutine) {
                 CreateRoutineView {
                     await routineService.loadRoutines()
@@ -98,6 +87,10 @@ struct RoutineListView: View {
         .navigationViewStyle(.stack)
         .task {
             await routineService.loadRoutines()
+        }
+        // 가운데 FAB → 루틴 추가 요청 — HomeTabView 가 게스트 체크 후 broadcast
+        .onReceive(NotificationCenter.default.publisher(for: .requestRoutineCreate)) { _ in
+            showCreateRoutine = true
         }
         // 루틴 완료 알림 수신 시 카운트(따라했어요) 즉시 갱신
         .onReceive(NotificationCenter.default.publisher(for: .routineCompleted)) { _ in
@@ -120,14 +113,11 @@ struct RoutineCard: View {
 
             // 작성자
             HStack(spacing: 6) {
-                AsyncImage(url: URL(string: routine.profiles?.avatarUrl ?? "")) { phase in
-                    switch phase {
-                    case .success(let img): img.resizable().scaledToFill()
-                    default: Circle().fill(Color.theme.surfaceHighest)
-                    }
-                }
-                .frame(width: 20, height: 20)
-                .clipShape(Circle())
+                ProfileAvatar(
+                    avatarUrl: routine.profiles?.avatarUrl,
+                    isOfficial: routine.profiles?.isOfficialAccount ?? false,
+                    size: 20
+                )
 
                 Text(routine.profiles?.displayName ?? "사용자")
                     .font(.system(size: 11, weight: .bold))

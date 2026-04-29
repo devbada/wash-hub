@@ -14,6 +14,11 @@ struct FeedListView: View {
         feedService.feeds.filter { !blockService.isBlocked($0.userId) }
     }
 
+    /// 둘러보기(게스트) 모드는 최신 5개만 미리 보여주고 가입 유도
+    private var guestPeekLimit: Int? {
+        authManager.isGuest ? 5 : nil
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -109,8 +114,11 @@ struct FeedListView: View {
                                     Button {
                                         navigatedFeedId = feed.id
                                     } label: {
-                                        FeedCard(feed: feed)
-                                            .contentShape(Rectangle())
+                                        FeedCard(
+                                            feed: feed,
+                                            isLikedByMe: feedService.likedFeedIds.contains(feed.id)
+                                        )
+                                        .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     .padding(.horizontal, 16)
@@ -162,7 +170,7 @@ struct FeedListView: View {
         .task {
             // 최초 로드
             await blockService.loadBlockedIds()
-            await feedService.loadFeeds()
+            await feedService.loadFeeds(maxCount: guestPeekLimit)
             if !authManager.isGuest {
                 await notificationService.fetchUnreadCount()
             }
@@ -171,7 +179,7 @@ struct FeedListView: View {
             // loadId 변경 시 새로고침 (pull-to-refresh, 버튼, 알림 등)
             Task {
                 await blockService.loadBlockedIds()
-                await feedService.loadFeeds(forceRefresh: true)
+                await feedService.loadFeeds(forceRefresh: true, maxCount: guestPeekLimit)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .feedCreated)) { _ in
@@ -257,6 +265,8 @@ struct FeedListView: View {
 // MARK: - 피드 카드
 struct FeedCard: View {
     let feed: Feed
+    /// 현재 사용자가 이 피드를 좋아요 했는지 — 빨간 하트로 표시할 때 true
+    var isLikedByMe: Bool = false
 
     /// 썸네일이 유효한 URL 인지 판단
     private var hasValidThumbnail: Bool {
@@ -341,16 +351,11 @@ struct FeedCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 // 작성자 — avatar_url 이 유효하지 않으면 placeholder
                 HStack(spacing: 8) {
-                    AsyncImage(url: URL(string: feed.profiles?.avatarUrl ?? "")) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                        default:
-                            Circle().fill(Color.theme.surface)
-                        }
-                    }
-                    .frame(width: 28, height: 28)
-                    .clipShape(Circle())
+                    ProfileAvatar(
+                        avatarUrl: feed.profiles?.avatarUrl,
+                        isOfficial: feed.profiles?.isOfficialAccount ?? false,
+                        size: 28
+                    )
 
                     Text(feed.profiles?.displayName ?? "사용자")
                         .font(.appCaptionMedium)
@@ -409,11 +414,11 @@ struct FeedCard: View {
                     .foregroundColor(.theme.tertiary)
                 }
 
-                // 좋아요 / 댓글
+                // 좋아요 / 댓글 — 내가 좋아요 한 피드는 빨간 하트로 강조
                 HStack(spacing: 16) {
-                    Label("\(feed.likeCount)", systemImage: "heart.fill")
+                    Label("\(feed.likeCount)", systemImage: isLikedByMe ? "heart.fill" : "heart")
                         .font(.appSmall)
-                        .foregroundColor(.theme.textSecondary)
+                        .foregroundColor(isLikedByMe ? .theme.error : .theme.textSecondary)
 
                     Label("\(feed.commentCount)", systemImage: "bubble.right.fill")
                         .font(.appSmall)

@@ -263,16 +263,11 @@ struct FeedDetailView: View {
                 // 작성자 프로필 탭 → UserProfileView 이동
                 NavigationLink(destination: UserProfileView(userId: feed.userId).environmentObject(authManager)) {
                     HStack(spacing: 10) {
-                        AsyncImage(url: URL(string: feed.profiles?.avatarUrl ?? "")) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            default:
-                                Circle().fill(Color.theme.surface)
-                            }
-                        }
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
+                        ProfileAvatar(
+                            avatarUrl: feed.profiles?.avatarUrl,
+                            isOfficial: feed.profiles?.isOfficialAccount ?? false,
+                            size: 36
+                        )
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
@@ -644,16 +639,11 @@ struct CommentRow: View {
     // MARK: - 일반 댓글 표시
     private var normalCommentView: some View {
         HStack(alignment: .top, spacing: 10) {
-            AsyncImage(url: URL(string: comment.profiles?.avatarUrl ?? "")) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    Circle().fill(Color.theme.surface)
-                }
-            }
-            .frame(width: 28, height: 28)
-            .clipShape(Circle())
+            ProfileAvatar(
+                avatarUrl: comment.profiles?.avatarUrl,
+                isOfficial: comment.profiles?.isOfficialAccount ?? false,
+                size: 28
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {

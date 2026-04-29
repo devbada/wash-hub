@@ -3,7 +3,22 @@ import Vision
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-/// 모자이크 영역 정보 — 자동 감지 얼굴 또는 수동 드래그 영역
+/// 모자이크 영역의 출처 — 자동 검출 종류 식별
+enum SensitiveAreaKind {
+    case face          // Vision 얼굴 자동 검출
+    case licensePlate  // Vision Text 인식 + 한국 번호판 정규식
+    case manual        // 사용자 드래그 추가
+
+    var displayName: String {
+        switch self {
+        case .face:         return "얼굴"
+        case .licensePlate: return "번호판"
+        case .manual:       return "직접 추가"
+        }
+    }
+}
+
+/// 모자이크 영역 정보 — 자동 감지(얼굴/번호판) 또는 수동 드래그 영역
 struct DetectedFace: Identifiable {
     let id = UUID()
     /// Vision 정규화 좌표 (좌하단 원점, 0~1) — 수동 영역도 동일 좌표계로 변환하여 저장
@@ -12,8 +27,11 @@ struct DetectedFace: Identifiable {
     let uiRect: CGRect
     /// 모자이크 적용 여부 (사용자가 토글)
     var isSelected: Bool = true
-    /// 수동 드래그로 추가된 영역인지 여부
-    var isManual: Bool = false
+    /// 영역 종류 (face/licensePlate/manual)
+    var kind: SensitiveAreaKind = .face
+
+    /// 호환용 — 기존 isManual 사용처 보존
+    var isManual: Bool { kind == .manual }
 }
 
 /// 얼굴 자동 모자이크 서비스
@@ -55,8 +73,57 @@ final class FaceMosaicService {
                 width: rect.size.width * imgW,
                 height: rect.size.height * imgH
             )
-            return DetectedFace(normalizedRect: rect, uiRect: uiRect)
+            return DetectedFace(normalizedRect: rect, uiRect: uiRect, kind: .face)
         }
+    }
+
+    /// 얼굴 + 번호판 + 그 외 민감 영역을 한 번에 검출 (편집 UI용)
+    /// - Parameter image: 원본 UIImage
+    /// - Returns: 얼굴/번호판 자동 검출 결과 통합 배열 — 사용자가 추가 수동 영역을 더할 수 있음
+    func detectSensitiveAreasForEditor(in image: UIImage) async -> [DetectedFace] {
+        guard let cgImage = image.cgImage else { return [] }
+
+        // 얼굴/번호판 병렬 검출 — 둘 다 Vision 이라 GPU/Neural Engine 동시 사용 가능
+        async let faceRectsTask = detectFaces(in: cgImage)
+        async let plateRectsTask = detectLicensePlates(in: cgImage)
+        let faceRects = await faceRectsTask
+        let plateRects = await plateRectsTask
+
+        let imgW = image.size.width
+        let imgH = image.size.height
+
+        var areas: [DetectedFace] = []
+
+        // 얼굴
+        for rect in faceRects {
+            let uiRect = CGRect(
+                x: rect.origin.x * imgW,
+                y: (1.0 - rect.origin.y - rect.size.height) * imgH,
+                width: rect.size.width * imgW,
+                height: rect.size.height * imgH
+            )
+            areas.append(DetectedFace(normalizedRect: rect, uiRect: uiRect, kind: .face))
+        }
+
+        // 번호판 — 텍스트 bounding box 가 빡빡하므로 가로 5%, 세로 15% 여유
+        // (한국 번호판은 가로 글자열만 인식되어 상하 padding 이 필요)
+        for rect in plateRects {
+            let inflated = CGRect(
+                x: max(0, rect.origin.x - rect.width * 0.05),
+                y: max(0, rect.origin.y - rect.height * 0.20),
+                width: min(1 - rect.origin.x, rect.width * 1.10),
+                height: min(1 - rect.origin.y, rect.height * 1.40)
+            )
+            let uiRect = CGRect(
+                x: inflated.origin.x * imgW,
+                y: (1.0 - inflated.origin.y - inflated.size.height) * imgH,
+                width: inflated.size.width * imgW,
+                height: inflated.size.height * imgH
+            )
+            areas.append(DetectedFace(normalizedRect: inflated, uiRect: uiRect, kind: .licensePlate))
+        }
+
+        return areas
     }
 
     /// 선택된 얼굴만 모자이크 처리한 이미지를 반환한다
@@ -96,7 +163,7 @@ final class FaceMosaicService {
             normalizedRect: normalizedRect,
             uiRect: uiRect,
             isSelected: true,
-            isManual: true
+            kind: .manual
         )
     }
 
@@ -125,6 +192,68 @@ final class FaceMosaicService {
                 try handler.perform([request])
             } catch {
                 print("Face detection error: \(error)")
+                continuation.resume(returning: [])
+            }
+        }
+    }
+
+    // MARK: - 번호판 감지 (Vision Text Recognition + 한국 번호판 정규식)
+
+    /// 한국 차량 번호판 정규식
+    /// - 신형 8자리: 숫자 3 + 한글 1 + 숫자 4 (예: 123가1234)
+    /// - 구형 7자리: 숫자 2 + 한글 1 + 숫자 4 (예: 12가1234)
+    /// - OCR 결과에 공백/하이픈이 들어갈 수 있으므로 사전 정규화 후 매칭
+    private static let licensePlateRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: "^\\d{2,3}[가-힣]\\d{4}$",
+            options: []
+        )
+    }()
+
+    /// Vision Text Recognition 으로 한국 번호판 텍스트를 찾고 그 bounding box 를 반환
+    /// - Parameter cgImage: CGImage
+    /// - Returns: Vision 정규화 좌표(좌하단 원점, 0~1) 의 번호판 영역 배열
+    private func detectLicensePlates(in cgImage: CGImage) async -> [CGRect] {
+        await withCheckedContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, error in
+                guard error == nil,
+                      let observations = request.results as? [VNRecognizedTextObservation] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                guard let regex = Self.licensePlateRegex else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var rects: [CGRect] = []
+                for observation in observations {
+                    guard let candidate = observation.topCandidates(1).first else { continue }
+                    // 공백/하이픈 제거 후 매칭 (OCR 가 공백을 끼울 수 있음)
+                    let normalized = candidate.string
+                        .replacingOccurrences(of: " ", with: "")
+                        .replacingOccurrences(of: "-", with: "")
+                        .replacingOccurrences(of: "·", with: "")
+                    let range = NSRange(normalized.startIndex..., in: normalized)
+                    if regex.firstMatch(in: normalized, options: [], range: range) != nil {
+                        rects.append(observation.boundingBox)
+                    }
+                }
+                continuation.resume(returning: rects)
+            }
+
+            // 한국어 인식 + 정확도 우선 + 자동 교정 끔 (번호판 글자를 임의로 바꾸지 않도록)
+            request.recognitionLanguages = ["ko"]
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = false
+            // 번호판은 사전에 없는 글자 조합이라 customWords 도 불필요
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                print("License plate detection error: \(error)")
                 continuation.resume(returning: [])
             }
         }
