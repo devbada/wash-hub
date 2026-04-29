@@ -143,6 +143,10 @@ extension Notification.Name {
     /// 동일 탭 재탭 → 해당 화면이 스크롤을 최상단으로 이동
     /// userInfo["tab"]: Int — 0=피드, 2=루틴, 3=케미컬, 4=내차
     static let requestScrollToTop = Notification.Name("requestScrollToTop")
+
+    /// 차량 세차 주기 변경 — WashRhythm 화면이 cars 재로드해서 새 주기 즉시 반영
+    /// userInfo["carId"]: String — 변경된 차량 ID
+    static let washCarIntervalChanged = Notification.Name("washCarIntervalChanged")
 }
 
 /// 세차지수 모델

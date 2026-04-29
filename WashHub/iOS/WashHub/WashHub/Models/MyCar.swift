@@ -15,6 +15,12 @@ struct MyCar: Identifiable, Codable, Hashable {
     let createdAt: String
     let updatedAt: String
 
+    // P3-012 세차 리듬 — 차량별 주기 설정
+    /// 사용자가 명시한 세차 주기 (1~60일). nil 이면 auto_recommended 사용
+    let preferredWashIntervalDays: Int?
+    /// wash_logs 기반 자동 추천 주기 (DB 트리거가 갱신)
+    let autoRecommendedIntervalDays: Int?
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -28,6 +34,18 @@ struct MyCar: Identifiable, Codable, Hashable {
         case status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case preferredWashIntervalDays = "preferred_wash_interval_days"
+        case autoRecommendedIntervalDays = "auto_recommended_interval_days"
+    }
+
+    /// 적용 주기 — preferred 가 있으면 그 값, 없으면 auto_recommended, 둘 다 없으면 14
+    var effectiveWashIntervalDays: Int {
+        preferredWashIntervalDays ?? autoRecommendedIntervalDays ?? 14
+    }
+
+    /// 자동 모드 여부 — preferred 가 nil 일 때
+    var isAutoIntervalMode: Bool {
+        preferredWashIntervalDays == nil
     }
 }
 

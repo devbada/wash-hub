@@ -4,7 +4,6 @@ struct BadgeCollectionView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var badgeService = BadgeService()
     @State private var selectedBadge: Badge?
-    @State private var showDetail = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 16),
@@ -29,23 +28,24 @@ struct BadgeCollectionView: View {
         }
         .navigationTitle("뱃지")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showDetail) {
-            if let badge = selectedBadge {
-                BadgeDetailSheet(
-                    badge: badge,
-                    isUnlocked: badgeService.isUnlocked(badgeId: badge.id),
-                    unlockedAt: badgeService.myBadges.first(where: { $0.badgeId == badge.id })?.unlockedAt,
-                    onSetTitle: { badgeId in
-                        guard let userId = authManager.currentUser?.id else { return false }
-                        let success = await badgeService.setTitle(userId: userId, badgeId: badgeId)
-                        if success {
-                            await authManager.loadProfile(userId: userId)
-                        }
-                        return success
+        // .sheet(item:) 패턴 — selectedBadge 가 set 됨과 동시에 sheet 표시
+        // (이전 .sheet(isPresented:) + selectedBadge 두 state 동시 set 시
+        //  첫 클릭 race condition 으로 빈 화면 보이던 버그 수정)
+        .sheet(item: $selectedBadge) { badge in
+            BadgeDetailSheet(
+                badge: badge,
+                isUnlocked: badgeService.isUnlocked(badgeId: badge.id),
+                unlockedAt: badgeService.myBadges.first(where: { $0.badgeId == badge.id })?.unlockedAt,
+                onSetTitle: { badgeId in
+                    guard let userId = authManager.currentUser?.id else { return false }
+                    let success = await badgeService.setTitle(userId: userId, badgeId: badgeId)
+                    if success {
+                        await authManager.loadProfile(userId: userId)
                     }
-                )
-                .environmentObject(authManager)
-            }
+                    return success
+                }
+            )
+            .environmentObject(authManager)
         }
         .task {
             await loadData()
@@ -108,8 +108,8 @@ struct BadgeCollectionView: View {
                 let unlocked = badgeService.isUnlocked(badgeId: badge.id)
                 BadgeGridItem(badge: badge, isUnlocked: unlocked)
                     .onTapGesture {
+                        // .sheet(item:) 가 selectedBadge non-nil 시 자동 표시
                         selectedBadge = badge
-                        showDetail = true
                     }
             }
         }

@@ -35,6 +35,11 @@ struct MyPageView: View {
                     // 프로필 헤더
                     profileHeader
 
+                    // 내 세차 리듬 (P3-012) — 차량 주기 + 노선도 + 다음 세차일
+                    if !authManager.isGuest {
+                        WashRhythmCard()
+                    }
+
                     // 뱃지 섹션
                     badgeSection
 
