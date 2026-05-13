@@ -74,8 +74,8 @@ struct MyCarListView: View {
                     }
                 }
 
-                // 마지막 카드가 탭바 overlay 뒤에 가리지 않도록 spacer
-                Color.clear.frame(height: 80)
+                // 마지막 카드가 탭바 overlay 뒤에 가리지 않도록 가상 빈 아이템
+                BottomTabBarSpacer()
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)

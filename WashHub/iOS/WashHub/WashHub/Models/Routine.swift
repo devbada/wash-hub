@@ -154,6 +154,9 @@ struct WashIndex {
     let score: Int           // 0~100
     let message: String
     let recommendation: String
+    /// 내일/모레 강수 예보가 강할 때 카드 하단에 작게 표시되는 보조 문구.
+    /// nil 이면 표시하지 않는다 (정상 날씨 — Edge Function 에서 결정).
+    let forecastNote: String?
     let details: WashIndexDetails
 
     struct WashIndexDetails {

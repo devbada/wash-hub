@@ -67,7 +67,14 @@ struct HomeTabView: View {
 
     // MARK: - iPhone 레이아웃 (커스텀 탭바 + 중앙 FAB)
     /// 콘텐츠는 ZStack 의 base 레이어로 항상 풀스크린(탭바 영역까지 차지).
-    /// 탭바/FAB 은 그 위 overlay — 숨김/표시되어도 콘텐츠 영역은 변화 없음.
+    /// 탭바/FAB 은 그 위 overlay — 디자인 의도 유지.
+    /// 스크롤 콘텐츠 마지막 아이템이 탭바에 가려지는 문제는, 각 ScrollView 의 content 끝에
+    /// `BottomTabBarSpacer()` (가상 빈 아이템) 를 추가해서 처리.
+    ///
+    /// 중요: 탭바/FAB 모두 **항상 ZStack 자식으로 존재** + `.opacity`/`.offset` 로만 숨김.
+    /// 조건부 `if` 로 mount/unmount 하면 SwiftUI 가 layout pass 를 다시 돌려
+    /// 자식 ScrollView 의 contentOffset 이 reset 되는 부작용 발생 (위로 스크롤하면
+    /// "올라갔다가 다시 내려오는" 증상). 자식 수를 일정하게 유지해 ScrollView 안정화.
     private var iPhoneLayout: some View {
         ZStack(alignment: .bottom) {
             // 콘텐츠 — 항상 풀스크린 (탭바 영역 포함). 스크롤 시 layout 변화 없음
@@ -82,11 +89,12 @@ struct HomeTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // 커스텀 하단 탭바 — overlay (콘텐츠 위에 떠있음). 숨김 시 슬라이드 다운
-            if !shouldHideBottom {
-                customTabBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            // 커스텀 하단 탭바 — 항상 자식 + 시각만 숨김 (ScrollView 안정화)
+            customTabBar
+                .offset(y: shouldHideBottom ? 120 : 0)
+                .opacity(shouldHideBottom ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
+                .allowsHitTesting(!shouldHideBottom)
 
             // 중앙 FAB — 댓글/루틴 따라하기/스크롤 다운 시 숨김
             createFloatingButton
@@ -95,13 +103,13 @@ struct HomeTabView: View {
                 .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
                 .allowsHitTesting(!shouldHideBottom)
         }
-        .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
     }
+
 
     // MARK: - iPad 레이아웃 (커스텀 탭바 + 우측 하단 FAB)
     private var iPadLayout: some View {
         ZStack(alignment: .bottomTrailing) {
-            // 콘텐츠 — 항상 풀스크린 (제스처 충돌 방지로 활성 탭만 렌더링)
+            // 콘텐츠 — 항상 풀스크린. 각 ScrollView 내부의 BottomTabBarSpacer 로 마지막 가림 처리
             Group {
                 switch selectedTab {
                 case 0:  FeedListView()
@@ -113,12 +121,13 @@ struct HomeTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // 커스텀 하단 탭바 — overlay
-            if !shouldHideBottom {
-                customTabBar
-                    .frame(maxWidth: .infinity)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            // 커스텀 하단 탭바 — iPhone 과 동일하게 항상 자식 + 시각만 숨김
+            customTabBar
+                .frame(maxWidth: .infinity)
+                .offset(y: shouldHideBottom ? 120 : 0)
+                .opacity(shouldHideBottom ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
+                .allowsHitTesting(!shouldHideBottom)
 
             // 우측 하단 FAB — overlay
             createFloatingButton
@@ -129,7 +138,6 @@ struct HomeTabView: View {
                 .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
                 .allowsHitTesting(!shouldHideBottom)
         }
-        .animation(.easeInOut(duration: 0.3), value: shouldHideBottom)
     }
 
     // MARK: - 커스텀 탭바 (iPhone + iPad 공용)

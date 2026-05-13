@@ -48,6 +48,9 @@ struct MyPageView: View {
 
                     // 설정
                     settingsSection
+
+                    // 마지막 항목(회원탈퇴)이 탭바에 가려지지 않도록 가상 빈 아이템
+                    BottomTabBarSpacer()
                 }
                 .padding(16)
             }

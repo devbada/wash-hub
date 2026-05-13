@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+import PostgREST
+import Auth
+import Supabase
 
 struct FeedDetailView: View {
     let feedId: String
@@ -315,10 +318,14 @@ struct FeedDetailView: View {
 
                 // 더보기 메뉴
                 if isMyFeed {
-                    // 본인 글: 수정/삭제
+                    // 본인 글: 수정(5분 이내만)/삭제
+                    // Threads 정책 동일 — 시간 초과 시 메뉴에서 "수정" 자체를 숨김
+                    // DB 트리거(enforce_feed_edit_window) 가 최종 검증
                     Menu {
-                        Button(action: { showEditSheet = true }) {
-                            Label("수정", systemImage: "pencil")
+                        if feed.isWithinEditWindow {
+                            Button(action: { showEditSheet = true }) {
+                                Label("수정", systemImage: "pencil")
+                            }
                         }
                         Button(role: .destructive, action: {
                             showDeleteConfirm = true
@@ -784,6 +791,10 @@ struct EditFeedView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
+    // 차량 변경 — 작성 화면과 동일 패턴. nil 이면 "차량 미지정" 으로 저장
+    @State private var myCars: [MyCar] = []
+    @State private var selectedCarId: String?
+
     init(feed: Feed, feedService: FeedService, onUpdated: @escaping (Feed) -> Void) {
         self.feed = feed
         self.feedService = feedService
@@ -791,6 +802,7 @@ struct EditFeedView: View {
         _content = State(initialValue: feed.content ?? "")
         _location = State(initialValue: feed.location ?? "")
         _washMethod = State(initialValue: feed.washMethod ?? "")
+        _selectedCarId = State(initialValue: feed.carId)
     }
 
     var body: some View {
@@ -840,6 +852,74 @@ struct EditFeedView: View {
                                 .washHubTextField()
                         }
 
+                        // 차량 변경 — 작성 화면과 동일한 chip UI. 탭하면 선택/해제 토글
+                        if !myCars.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("세차한 차량 (선택)")
+                                    .font(.appLabel)
+                                    .foregroundColor(.theme.textSecondary)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(myCars) { car in
+                                            Button(action: {
+                                                selectedCarId = selectedCarId == car.id ? nil : car.id
+                                            }) {
+                                                HStack(spacing: 8) {
+                                                    if let imageUrl = car.imageUrl,
+                                                       let url = URL(string: imageUrl) {
+                                                        AsyncImage(url: url) { phase in
+                                                            switch phase {
+                                                            case .success(let img):
+                                                                img.resizable().scaledToFill()
+                                                            default:
+                                                                Image(systemName: "car.fill")
+                                                                    .foregroundColor(.theme.textDisabled)
+                                                            }
+                                                        }
+                                                        .frame(width: 32, height: 32)
+                                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                                    } else {
+                                                        Image(systemName: "car.fill")
+                                                            .font(.system(size: 16))
+                                                            .foregroundColor(selectedCarId == car.id ? .white : .theme.textSecondary)
+                                                    }
+
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        Text(car.carModel)
+                                                            .font(.appSmall)
+                                                            .foregroundColor(selectedCarId == car.id ? .white : .theme.textPrimary)
+                                                        if let color = car.carColor {
+                                                            Text(color)
+                                                                .font(.system(size: 10))
+                                                                .foregroundColor(selectedCarId == car.id ? .white.opacity(0.85) : .theme.textDisabled)
+                                                        }
+                                                    }
+                                                }
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    selectedCarId == car.id
+                                                        ? Color.theme.secondary
+                                                        : Color.theme.surface
+                                                )
+                                                .cornerRadius(10)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 10)
+                                                        .stroke(
+                                                            selectedCarId == car.id
+                                                                ? Color.theme.secondary
+                                                                : Color.theme.border,
+                                                            lineWidth: 1
+                                                        )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         if let errorMessage = errorMessage {
                             Text(errorMessage)
                                 .font(.appSmall)
@@ -878,6 +958,27 @@ struct EditFeedView: View {
                         .foregroundColor(.theme.textSecondary)
                 }
             }
+            .task { await loadMyCars() }
+        }
+    }
+
+    // MARK: - 내차 목록 로드
+    // CreateFeedView 와 동일한 패턴 (status=ACTIVE, is_primary 우선 정렬)
+    // 단, 초기 선택값은 feed.carId 그대로 유지 (대표 차량 자동 선택 X — 기존 작성값 보존)
+    private func loadMyCars() async {
+        do {
+            let session = try await supabase.auth.session
+            let persistCars: [MyCar] = try await supabase
+                .from("my_cars")
+                .select()
+                .eq("user_id", value: session.user.id.uuidString)
+                .eq("status", value: "ACTIVE")
+                .order("is_primary", ascending: false)
+                .execute()
+                .value
+            myCars = persistCars
+        } catch {
+            print("EditFeedView MyCars load error: \(error)")
         }
     }
 
@@ -891,7 +992,8 @@ struct EditFeedView: View {
                     id: feed.id,
                     content: content.isEmpty ? nil : content,
                     location: location.isEmpty ? nil : location,
-                    washMethod: washMethod.isEmpty ? nil : washMethod
+                    washMethod: washMethod.isEmpty ? nil : washMethod,
+                    carId: selectedCarId
                 )
                 // 수정된 피드를 다시 로드
                 if let updatedFeed = await feedService.loadFeed(id: feed.id) {
@@ -899,7 +1001,14 @@ struct EditFeedView: View {
                 }
                 dismiss()
             } catch {
-                errorMessage = "수정에 실패했습니다: \(error.localizedDescription)"
+                // DB 트리거 enforce_feed_edit_window 의 5분 초과 에러 별도 메시지
+                let errorString = "\(error)"
+                if errorString.contains("feed_edit_window_expired")
+                    || errorString.contains("5분 이내") {
+                    errorMessage = "피드는 작성 후 5분 이내에만 수정 가능합니다. 5분이 지나면 삭제만 가능해요."
+                } else {
+                    errorMessage = "수정에 실패했습니다: \(error.localizedDescription)"
+                }
                 print("Feed update error: \(error)")
             }
             isLoading = false

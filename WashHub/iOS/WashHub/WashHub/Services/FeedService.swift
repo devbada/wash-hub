@@ -416,18 +416,42 @@ final class FeedService: ObservableObject {
         id: String,
         content: String?,
         location: String?,
-        washMethod: String?
+        washMethod: String?,
+        carId: String?
     ) async throws {
+        // car_id 는 Optional 이지만, Swift Encodable 자동 합성은 nil 일 때 키 자체를 omit 한다.
+        // PostgREST 는 키 omit = "변경 안 함" 으로 해석하므로, 명시적 "차량 해제" 케이스가 무효 처리됨.
+        // → custom encode 로 nil 일 때 명시적 null 직렬화 → DB 컬럼이 NULL 로 갱신되도록 강제.
         struct FeedUpdate: Encodable {
             let content: String
             let location: String
             let wash_method: String
+            let car_id: String?
             let is_edited: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case content, location, wash_method, car_id, is_edited
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(content, forKey: .content)
+                try c.encode(location, forKey: .location)
+                try c.encode(wash_method, forKey: .wash_method)
+                try c.encode(is_edited, forKey: .is_edited)
+                // nil 도 명시적 null 로 — 사용자가 차량 해제한 의도 보존
+                if let carId = car_id {
+                    try c.encode(carId, forKey: .car_id)
+                } else {
+                    try c.encodeNil(forKey: .car_id)
+                }
+            }
         }
         let payload = FeedUpdate(
             content: content ?? "",
             location: location ?? "",
             wash_method: washMethod ?? "",
+            car_id: carId,
             is_edited: true
         )
 
@@ -439,6 +463,107 @@ final class FeedService: ObservableObject {
 
         // 피드 내용 변경 → 캐시 무효화
         Self.invalidateFeedListCache()
+
+        // wash_log 동기화 — createFeed 의 자동 생성 패턴을 수정 시에도 일관되게 유지
+        // (사용자 의도: 차량 변경은 중요한 정정 작업이므로 세차로그 전체에 반영되어야 함)
+        // 4가지 케이스를 한 번에 처리: 신규 생성 / car_id+memo 갱신 / 소프트 삭제 / 변경 없음
+        try await syncWashLogForFeed(
+            feedId: id,
+            newCarId: carId,
+            content: content
+        )
+    }
+
+    /// 피드 작성/수정 후 wash_log 와 동기화.
+    ///
+    /// 케이스:
+    /// - 새 car_id == nil 이고 기존 wash_log 없음 → 변화 없음
+    /// - 새 car_id == nil 이고 기존 wash_log 있음 → status='DELETED' 소프트 삭제 (deleteFeed 패턴)
+    /// - 새 car_id != nil 이고 기존 wash_log 없음 → 새 wash_log INSERT (createFeed 패턴)
+    /// - 새 car_id != nil 이고 기존 wash_log 있음 → car_id + memo UPDATE
+    ///
+    /// wash_log INSERT/UPDATE 시 memo 는 본문 1줄 발췌 (createFeed 와 동일 규칙).
+    /// 차량 변경/삭제/추가 모든 경우에 동적 아이콘 캐시 무효화 (마지막 세차 기록 영향).
+    private func syncWashLogForFeed(
+        feedId: String,
+        newCarId: String?,
+        content: String?
+    ) async throws {
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+
+            // 기존 active wash_log 존재 여부만 조회 (id 정도면 충분)
+            struct WashLogIdRow: Decodable { let id: String }
+            let persistActiveLogs: [WashLogIdRow] = try await supabase
+                .from("wash_logs")
+                .select("id")
+                .eq("feed_id", value: feedId)
+                .neq("status", value: "DELETED")
+                .execute()
+                .value
+
+            let hasActiveLog = !persistActiveLogs.isEmpty
+
+            // memo — 본문 1줄 발췌 (createFeed 와 동일 규칙)
+            let memo: String = {
+                guard let raw = content?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+                    return "피드에서 자동 생성"
+                }
+                let firstLine = raw.split(separator: "\n").first.map(String.init) ?? raw
+                return String(firstLine.prefix(80))
+            }()
+
+            if let carId = newCarId {
+                if hasActiveLog {
+                    // 기존 wash_log car_id + memo 동기화 (사용자가 입력한 wash_log 메모 덮어씀 — 옵션 2)
+                    struct WashLogSync: Encodable {
+                        let car_id: String
+                        let memo: String
+                    }
+                    try await supabase
+                        .from("wash_logs")
+                        .update(WashLogSync(car_id: carId, memo: memo))
+                        .eq("feed_id", value: feedId)
+                        .neq("status", value: "DELETED")
+                        .execute()
+                } else {
+                    // 새 wash_log INSERT — createFeed 와 동일 패턴 (KST 오늘 날짜)
+                    let now = Date()
+                    let today = ISO8601DateFormatter.string(
+                        from: now,
+                        timeZone: TimeZone(identifier: "Asia/Seoul") ?? .current,
+                        formatOptions: [.withFullDate, .withDashSeparatorInDate]
+                    )
+                    try await supabase
+                        .from("wash_logs")
+                        .insert([
+                            "user_id": userId,
+                            "car_id": carId,
+                            "feed_id": feedId,
+                            "wash_date": today,
+                            "memo": memo,
+                            "status": "ACTIVE"
+                        ])
+                        .execute()
+                }
+            } else if hasActiveLog {
+                // 새 car_id == nil + 기존 wash_log 있음 → 소프트 삭제 (deleteFeed 패턴)
+                try await supabase
+                    .from("wash_logs")
+                    .update(["status": "DELETED"])
+                    .eq("feed_id", value: feedId)
+                    .neq("status", value: "DELETED")
+                    .execute()
+            }
+
+            // 마지막 세차 기록 변동 가능성 → 동적 아이콘 캐시 무효화
+            DynamicIconService.shared.invalidateWashLogCache()
+        } catch {
+            // 피드 UPDATE 자체는 성공한 상태이므로 wash_log 동기화 실패는 로그만
+            // TODO-minam: 실패 모니터링 — Sentry 등 도입 시 여기서 capture
+            print("⚠️ wash_log 동기화 실패: \(error)")
+        }
     }
 
     // MARK: - 피드 삭제 (소프트 삭제)

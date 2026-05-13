@@ -71,6 +71,7 @@ final class WashIndexService: ObservableObject {
                 score: result.score,
                 message: result.message,
                 recommendation: result.recommendation,
+                forecastNote: result.forecastNote,
                 details: WashIndex.WashIndexDetails(
                     rainProbability: result.weather.rainProbability,
                     fineDust: result.dust.pm10,
@@ -87,6 +88,7 @@ final class WashIndexService: ObservableObject {
                 score: 50,
                 message: "날씨 정보를 가져올 수 없습니다",
                 recommendation: "날씨를 직접 확인해주세요",
+                forecastNote: nil,
                 details: WashIndex.WashIndexDetails(
                     rainProbability: 0,
                     fineDust: 0,
@@ -334,6 +336,8 @@ private struct WeatherProxyResponse: Codable {
     let message: String
     let recommendation: String
     let grade: String
+    /// 내일/모레 강수 예보 안내 문구. Edge Function 에서 조건 충족 시에만 채워진다.
+    let forecastNote: String?
 
     struct WeatherData: Codable {
         let rainProbability: Int

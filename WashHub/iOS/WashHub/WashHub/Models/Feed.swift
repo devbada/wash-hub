@@ -59,6 +59,27 @@ struct Feed: Identifiable, Codable {
         default:       return nil
         }
     }
+
+    /// `createdAt` (ISO8601 문자열) 을 Date 로 파싱.
+    /// Supabase timestamptz 는 보통 fractional seconds 포함 — 두 옵션 모두 시도.
+    var createdAtDate: Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: createdAt) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: createdAt)
+    }
+
+    /// 피드 수정 허용 시간 — Threads 정책 동일 (게시 후 5분)
+    /// DB 측 트리거(`enforce_feed_edit_window`) 가 최종 검증하므로
+    /// 클라이언트는 UI 노출 제어용으로만 사용 (파싱 실패 시 보수적으로 허용)
+    static let editWindow: TimeInterval = 5 * 60
+
+    /// 현재 시점이 수정 가능 시간 안인지 여부 — 수정 메뉴 표시/숨김 결정에 사용
+    var isWithinEditWindow: Bool {
+        guard let createdAt = createdAtDate else { return true }
+        return Date().timeIntervalSince(createdAt) <= Self.editWindow
+    }
 }
 
 /// 피드에 JOIN되는 차량 요약 정보

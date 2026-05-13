@@ -172,16 +172,23 @@ final class FaceMosaicService {
     /// Vision 프레임워크로 얼굴 영역을 감지한다
     /// - Parameter cgImage: CGImage
     /// - Returns: 정규화된 얼굴 영역 배열 (Vision 좌표: 좌하단 원점, 0~1 범위)
+    ///
+    /// - Note: Vision 의 completionHandler 와 `handler.perform` 의 throw 가
+    ///         동시에 발생하면 continuation 이 두 번 resume 되어 fatal error 가 발생할 수 있다.
+    ///         (예: 시뮬레이터에서 "Could not create inference context" 에러 발생 시)
+    ///         `ResumeGuard` 로 단 1회만 resume 되도록 보호한다.
     private func detectFaces(in cgImage: CGImage) async -> [CGRect] {
         await withCheckedContinuation { continuation in
+            let guardBox = ResumeGuard<[CGRect]>(continuation: continuation)
+
             let request = VNDetectFaceRectanglesRequest { request, error in
                 guard error == nil,
                       let results = request.results as? [VNFaceObservation] else {
-                    continuation.resume(returning: [])
+                    guardBox.resume([])
                     return
                 }
                 let rects = results.map { $0.boundingBox }
-                continuation.resume(returning: rects)
+                guardBox.resume(rects)
             }
 
             // 정확도 우선 (배터리보다 감지율 중시)
@@ -192,7 +199,7 @@ final class FaceMosaicService {
                 try handler.perform([request])
             } catch {
                 print("Face detection error: \(error)")
-                continuation.resume(returning: [])
+                guardBox.resume([])
             }
         }
     }
@@ -215,15 +222,17 @@ final class FaceMosaicService {
     /// - Returns: Vision 정규화 좌표(좌하단 원점, 0~1) 의 번호판 영역 배열
     private func detectLicensePlates(in cgImage: CGImage) async -> [CGRect] {
         await withCheckedContinuation { continuation in
+            let guardBox = ResumeGuard<[CGRect]>(continuation: continuation)
+
             let request = VNRecognizeTextRequest { request, error in
                 guard error == nil,
                       let observations = request.results as? [VNRecognizedTextObservation] else {
-                    continuation.resume(returning: [])
+                    guardBox.resume([])
                     return
                 }
 
                 guard let regex = Self.licensePlateRegex else {
-                    continuation.resume(returning: [])
+                    guardBox.resume([])
                     return
                 }
 
@@ -240,7 +249,7 @@ final class FaceMosaicService {
                         rects.append(observation.boundingBox)
                     }
                 }
-                continuation.resume(returning: rects)
+                guardBox.resume(rects)
             }
 
             // 한국어 인식 + 정확도 우선 + 자동 교정 끔 (번호판 글자를 임의로 바꾸지 않도록)
@@ -254,7 +263,7 @@ final class FaceMosaicService {
                 try handler.perform([request])
             } catch {
                 print("License plate detection error: \(error)")
-                continuation.resume(returning: [])
+                guardBox.resume([])
             }
         }
     }
@@ -335,5 +344,33 @@ final class FaceMosaicService {
             scale: image.scale,
             orientation: image.imageOrientation
         )
+    }
+}
+
+// MARK: - Continuation 단일 resume 보호용 헬퍼
+
+/// `withCheckedContinuation` 사용 시 두 경로(예: completionHandler / catch 블록)에서
+/// resume 이 동시에 일어날 가능성이 있을 때 단 1회만 resume 되도록 보장한다.
+///
+/// Vision 의 `VNRequest.completionHandler` 와 `VNImageRequestHandler.perform` 의 throw 가
+/// 함께 발생하는 경우(시뮬레이터의 "Could not create inference context" 등)
+/// SWIFT TASK CONTINUATION MISUSE fatal error 가 발생하므로 이를 방지한다.
+private final class ResumeGuard<T> {
+    private let lock = NSLock()
+    private var didResume = false
+    private let continuation: CheckedContinuation<T, Never>
+
+    init(continuation: CheckedContinuation<T, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: T) {
+        lock.lock()
+        let shouldResume = !didResume
+        if shouldResume { didResume = true }
+        lock.unlock()
+        if shouldResume {
+            continuation.resume(returning: value)
+        }
     }
 }

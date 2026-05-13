@@ -93,6 +93,11 @@ struct WashIndexCard: View {
                         .foregroundColor(.theme.textPrimary)
                         .lineLimit(2)
 
+                    // 임박 강수 예보 안내 (내일/모레 비 예보 강할 때만 표시)
+                    if let note = index.forecastNote {
+                        forecastNoteChip(note)
+                    }
+
                     // 날씨 상세 그리드
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
@@ -170,6 +175,23 @@ struct WashIndexCard: View {
             }
         }
         .frame(width: 100, height: 100)
+    }
+
+    // MARK: - Forecast Note Chip (임박 강수 예보 보조 문구)
+    private func forecastNoteChip(_ note: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "cloud.rain.fill")
+                .font(.system(size: 10, weight: .bold))
+            Text(note)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .foregroundColor(.theme.onSurfaceVariant)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.theme.surfaceHigh)
+        .cornerRadius(6)
     }
 
     // MARK: - Weather Item

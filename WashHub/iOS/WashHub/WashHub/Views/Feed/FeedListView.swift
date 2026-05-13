@@ -12,6 +12,8 @@ struct FeedListView: View {
     /// 스크롤 idle 감지용 — 일정 시간 추가 스크롤 없으면 탭바 자동 표시
     @State private var scrollIdleTask: Task<Void, Never>?
     @ObservedObject private var notificationService = NotificationService.shared
+    /// NavigationStack 경로 — 탭 재탭 시 root 로 pop 처리 위해 @State 로 관리
+    @State private var navigationPath = NavigationPath()
 
     /// 차단 사용자 필터링된 피드 목록
     private var filteredFeeds: [Feed] {
@@ -24,7 +26,7 @@ struct FeedListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color.theme.surface
                     .ignoresSafeArea()
@@ -161,6 +163,9 @@ struct FeedListView: View {
                                     }
                                 }
                             }
+
+                            // 마지막 카드가 탭바에 가려지지 않도록 가상 빈 아이템 추가
+                            BottomTabBarSpacer()
                         }
                         .padding(.bottom, 16)
                     }
@@ -170,9 +175,13 @@ struct FeedListView: View {
                         try? await Task.sleep(nanoseconds: 300_000_000)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // 동일 탭(피드) 재탭 → 최상단으로 스크롤
+                    // 동일 탭(피드) 재탭 → NavigationStack 을 root 로 pop + 스크롤 최상단
+                    // (push 된 화면 — 마이페이지/팔로우 목록/검색 결과 등 — 에서도 일관되게 동작)
                     .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
                         guard (note.userInfo?["tab"] as? Int) == 0 else { return }
+                        if !navigationPath.isEmpty {
+                            navigationPath = NavigationPath()   // pop to root
+                        }
                         withAnimation(.easeInOut(duration: 0.3)) {
                             scrollProxy.scrollTo("top", anchor: .top)
                         }
