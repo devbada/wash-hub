@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RoutineListView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var navCoordinator: NavigationCoordinator
     @StateObject private var routineService = RoutineService()
     @State private var showCreateRoutine = false
     @State private var showLoginAlert = false
@@ -15,7 +16,7 @@ struct RoutineListView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack(path: $navCoordinator.routinePath) {
             ZStack {
                 // 배경 탭 → 검색창 키보드 닫기
                 // (Color 가 ZStack 의 가장 아래 레이어라 검색바/카드 등 인터랙티브 요소와 충돌 X)
@@ -83,8 +84,8 @@ struct RoutineListView: View {
                                 await routineService.loadRoutines()
                             }
                             // 동일 탭(루틴=2) 재탭 → 최상단으로 스크롤
-                            .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
-                                guard (note.userInfo?["tab"] as? Int) == 2 else { return }
+                            // (pop-to-root 는 NavigationCoordinator 가 path 직접 비워 처리)
+                            .onChange(of: navCoordinator.scrollToTopTokens[2]) { _, _ in
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     scrollProxy.scrollTo("top", anchor: .top)
                                 }
@@ -118,7 +119,6 @@ struct RoutineListView: View {
                 Text("루틴 등록은 로그인 후 이용할 수 있습니다.")
             }
         }
-        .navigationViewStyle(.stack)
         .task {
             await routineService.loadRoutines()
         }

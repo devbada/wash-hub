@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeTabView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var navCoordinator: NavigationCoordinator
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @ObservedObject private var uiState = AppUIState.shared
     @ObservedObject private var coachmark = CoachmarkController.shared
@@ -171,13 +172,11 @@ struct HomeTabView: View {
                 showLoginAlert = true
                 return
             }
-            // 동일 탭 재탭 → 스크롤 최상단 이동 / 다른 탭 → 일반 전환
+            // 동일 탭 재탭 → NavigationStack pop-to-root + 스크롤 최상단
+            // 다른 탭 → 일반 전환 (NavigationCoordinator 가 각 탭의 path 를 보존하므로
+            // 사용자가 마이페이지→다른 탭→다시 피드 로 돌아오면 마이페이지 그대로 유지)
             if selectedTab == tag {
-                NotificationCenter.default.post(
-                    name: .requestScrollToTop,
-                    object: nil,
-                    userInfo: ["tab": tag]
-                )
+                navCoordinator.popAndScrollToTop(tab: tag)
             } else {
                 selectedTab = tag
             }

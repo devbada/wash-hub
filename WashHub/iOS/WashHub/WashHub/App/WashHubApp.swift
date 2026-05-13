@@ -4,6 +4,9 @@ import Supabase
 @main
 struct WashHubApp: App {
     @StateObject private var authManager = AuthManager()
+    /// 탭별 NavigationStack path + scroll-to-top 트리거를 중앙 관리
+    /// (탭 재탭 시 pop-to-root 동작 — CONVENTIONS.md 6.1 참조)
+    @StateObject private var navCoordinator = NavigationCoordinator()
     @Environment(\.scenePhase) private var scenePhase
 
     /// 앱 시작 시 1.5초간 SplashView 노출 — 동적 아이콘 + 앱명
@@ -23,6 +26,7 @@ struct WashHubApp: App {
                 // 등장 시 미세하게 zoom-in (0.96 → 1.0) + 페이드인으로 자연스러운 전환
                 ContentView()
                     .environmentObject(authManager)
+                    .environmentObject(navCoordinator)
                     .preferredColorScheme(.light)
                     .scaleEffect(isSplashVisible ? 0.96 : 1.0)
                     .opacity(isSplashVisible ? 0 : 1)

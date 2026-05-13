@@ -1,8 +1,15 @@
 import SwiftUI
 import Supabase
 
+/// 케미컬 탭 NavigationStack 의 value-based destination 타입.
+/// (FeedListView 의 FeedNavTarget 과 동일 패턴 — CONVENTIONS.md 6.1 참조)
+enum EquipmentNavTarget: Hashable {
+    case detail(String)   // equipment id
+}
+
 struct EquipmentListView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var navCoordinator: NavigationCoordinator
     @State private var equipments: [Equipment] = []
     @State private var isLoading = true
     @State private var searchText = ""
@@ -25,7 +32,7 @@ struct EquipmentListView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack(path: $navCoordinator.equipmentPath) {
             ZStack {
                 Color.theme.surface.ignoresSafeArea()
 
@@ -89,7 +96,8 @@ struct EquipmentListView: View {
                                     Color.clear.frame(height: 0).id("top")
 
                                     ForEach(filteredEquipments) { equipment in
-                                        NavigationLink(destination: EquipmentDetailView(equipment: equipment, onChanged: { await loadEquipments(forceRefresh: true) })) {
+                                        // value-based — navCoordinator.equipmentPath 로 pop 가능
+                                        NavigationLink(value: EquipmentNavTarget.detail(equipment.id)) {
                                             EquipmentCard(equipment: equipment)
                                         }
                                         .buttonStyle(.plain)
@@ -102,8 +110,8 @@ struct EquipmentListView: View {
                                 .padding(.top, 16)
                             }
                             // 동일 탭(케미컬=3) 재탭 → 최상단으로 스크롤
-                            .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
-                                guard (note.userInfo?["tab"] as? Int) == 3 else { return }
+                            // (pop-to-root 는 NavigationCoordinator 가 path 직접 비워 처리)
+                            .onChange(of: navCoordinator.scrollToTopTokens[3]) { _, _ in
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     scrollProxy.scrollTo("top", anchor: .top)
                                 }
@@ -114,6 +122,17 @@ struct EquipmentListView: View {
             }
             .navigationTitle("케미컬")
             .navigationBarTitleDisplayMode(.inline)
+            // value-based 진입 — equipmentPath 로 push/pop
+            .navigationDestination(for: EquipmentNavTarget.self) { target in
+                switch target {
+                case .detail(let equipmentId):
+                    if let equipment = equipments.first(where: { $0.id == equipmentId }) {
+                        EquipmentDetailView(equipment: equipment, onChanged: {
+                            await loadEquipments(forceRefresh: true)
+                        })
+                    }
+                }
+            }
             .toolbar {
                 // 좌측: 세차장 목록 sheet (자체 NavigationView 보유 → push 시 중첩 경고 회피)
                 ToolbarItem(placement: .navigationBarLeading) {
