@@ -1,14 +1,22 @@
 import SwiftUI
 import Supabase
 
+/// 내차 탭 NavigationStack 의 value-based destination 타입.
+/// (FeedListView 의 FeedNavTarget 과 동일 패턴 — CONVENTIONS.md 6.1 참조)
+enum MyCarNavTarget: Hashable {
+    case stats                    // 세차 통계
+    case washLogs(String)         // car id → WashLogListView
+}
+
 struct MyCarListView: View {
+    @EnvironmentObject var navCoordinator: NavigationCoordinator
     @State private var myCars: [MyCar] = []
     @State private var isLoading = true
     @State private var showAddCar = false
     @State private var showStats = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack(path: $navCoordinator.myCarPath) {
             ZStack {
                 Color.theme.surface
                     .ignoresSafeArea()
@@ -23,10 +31,21 @@ struct MyCarListView: View {
             }
             .navigationTitle("내차")
             .navigationBarTitleDisplayMode(.inline)
+            // value-based 진입 — myCarPath 로 push/pop
+            .navigationDestination(for: MyCarNavTarget.self) { target in
+                switch target {
+                case .stats:
+                    WashStatsView()
+                case .washLogs(let carId):
+                    if let car = myCars.first(where: { $0.id == carId }) {
+                        WashLogListView(car: car)
+                    }
+                }
+            }
             .toolbar {
                 // 좌측: 세차 통계 진입
                 ToolbarItem(placement: .navigationBarLeading) {
-                    NavigationLink(destination: WashStatsView()) {
+                    NavigationLink(value: MyCarNavTarget.stats) {
                         Image(systemName: "chart.bar.fill")
                             .foregroundColor(.theme.secondary)
                     }
@@ -43,7 +62,6 @@ struct MyCarListView: View {
                 AddMyCarView { await loadCars() }
             }
         }
-        .navigationViewStyle(.stack)
         .task { await loadCars() }
     }
 
@@ -52,10 +70,13 @@ struct MyCarListView: View {
     @State private var showDeleteConfirm = false
 
     private var carList: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             LazyVStack(spacing: 12) {
+                Color.clear.frame(height: 0).id("top")
                 ForEach(myCars) { car in
-                    NavigationLink(destination: WashLogListView(car: car)) {
+                    // value-based — myCarPath 로 pop 가능
+                    NavigationLink(value: MyCarNavTarget.washLogs(car.id)) {
                         MyCarCard(car: car)
                     }
                     .buttonStyle(.plain)
@@ -95,6 +116,13 @@ struct MyCarListView: View {
         } message: {
             Text("\(deletingCar?.carModel ?? "이 차량")을 삭제하시겠습니까?\n관련 세차 기록도 함께 삭제됩니다.")
         }
+        // 동일 탭(내차=4) 재탭 → 최상단으로 스크롤
+        .onChange(of: navCoordinator.scrollToTopTokens[4]) { _, _ in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                scrollProxy.scrollTo("top", anchor: .top)
+            }
+        }
+        } // ScrollViewReader 닫기
     }
 
     private var emptyView: some View {

@@ -1,19 +1,25 @@
 import SwiftUI
 
+/// 피드 탭 NavigationStack 의 value-based destination 타입.
+/// destination-based `NavigationLink(destination:)` 은 `NavigationStack(path:)` 와 자동 연동이
+/// 보장되지 않아 `path` mutation 으로 pop 이 안 되는 케이스가 있어, 모든 push 를 value-based 로 처리.
+enum FeedNavTarget: Hashable {
+    case myPage
+    case feedDetail(String)   // feed id
+}
+
 struct FeedListView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var navCoordinator: NavigationCoordinator
     @StateObject private var feedService = FeedService()
     @ObservedObject private var blockService = BlockService.shared
     @State private var showLoginAlert = false
     @State private var loadId = UUID()
-    @State private var navigatedFeedId: String?
     /// 더블탭 좋아요 시각 피드백 — 현재 큰 하트가 보이는 피드 ID
     @State private var heartAnimationFeedId: String?
     /// 스크롤 idle 감지용 — 일정 시간 추가 스크롤 없으면 탭바 자동 표시
     @State private var scrollIdleTask: Task<Void, Never>?
     @ObservedObject private var notificationService = NotificationService.shared
-    /// NavigationStack 경로 — 탭 재탭 시 root 로 pop 처리 위해 @State 로 관리
-    @State private var navigationPath = NavigationPath()
 
     /// 차단 사용자 필터링된 피드 목록
     private var filteredFeeds: [Feed] {
@@ -26,7 +32,7 @@ struct FeedListView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+        NavigationStack(path: $navCoordinator.feedPath) {
             ZStack {
                 Color.theme.surface
                     .ignoresSafeArea()
@@ -90,7 +96,8 @@ struct FeedListView: View {
                                 profileAvatarView
                             }
                         } else {
-                            NavigationLink(destination: MyPageView()) {
+                            // value-based — NavigationCoordinator.feedPath 로 pop 가능
+                            NavigationLink(value: FeedNavTarget.myPage) {
                                 profileAvatarView
                             }
                         }
@@ -132,9 +139,9 @@ struct FeedListView: View {
                                         .onTapGesture(count: 2) {
                                             handleDoubleTapLike(feed: feed)
                                         }
-                                        // 단탭 → 피드 상세
+                                        // 단탭 → 피드 상세 (value-based — feedPath 로 pop 가능)
                                         .onTapGesture(count: 1) {
-                                            navigatedFeedId = feed.id
+                                            navCoordinator.feedPath.append(FeedNavTarget.feedDetail(feed.id))
                                         }
 
                                         // 더블탭 시각 피드백 — 큰 빨간 하트
@@ -175,13 +182,9 @@ struct FeedListView: View {
                         try? await Task.sleep(nanoseconds: 300_000_000)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // 동일 탭(피드) 재탭 → NavigationStack 을 root 로 pop + 스크롤 최상단
-                    // (push 된 화면 — 마이페이지/팔로우 목록/검색 결과 등 — 에서도 일관되게 동작)
-                    .onReceive(NotificationCenter.default.publisher(for: .requestScrollToTop)) { note in
-                        guard (note.userInfo?["tab"] as? Int) == 0 else { return }
-                        if !navigationPath.isEmpty {
-                            navigationPath = NavigationPath()   // pop to root
-                        }
+                    // 동일 탭(피드) 재탭 → 스크롤 최상단 (pop-to-root 는 NavigationCoordinator
+                    // 가 path 를 직접 비워 처리하므로 여기서는 스크롤만 책임)
+                    .onChange(of: navCoordinator.scrollToTopTokens[0]) { _, _ in
                         withAnimation(.easeInOut(duration: 0.3)) {
                             scrollProxy.scrollTo("top", anchor: .top)
                         }
@@ -224,12 +227,12 @@ struct FeedListView: View {
                     } // ScrollViewReader 닫기
                 }
             }
-            // 프로그래밍 방식 네비게이션 — iPad에서 인라인 NavigationLink 터치 이슈 우회
-            .navigationDestination(isPresented: Binding(
-                get: { navigatedFeedId != nil },
-                set: { if !$0 { navigatedFeedId = nil } }
-            )) {
-                if let feedId = navigatedFeedId {
+            // value-based 진입 — feedPath 로 push/pop (탭 재탭 시 pop-to-root 가능)
+            .navigationDestination(for: FeedNavTarget.self) { target in
+                switch target {
+                case .myPage:
+                    MyPageView()
+                case .feedDetail(let feedId):
                     FeedDetailView(feedId: feedId)
                 }
             }
