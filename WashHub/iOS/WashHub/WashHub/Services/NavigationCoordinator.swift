@@ -41,10 +41,9 @@ final class NavigationCoordinator: ObservableObject {
     /// (탭 번호 → UUID. UUID 가 바뀌면 새 트리거)
     @Published var scrollToTopTokens: [Int: UUID] = [:]
 
-    /// 같은 탭을 다시 탭했을 때 호출 — NavigationStack 을 root 로 pop + scroll-to-top 트리거.
-    /// path 는 동일 인스턴스 mutate (`removeLast(count)`) 로 처리 — 새 인스턴스 할당 (`= NavigationPath()`)
-    /// 보다 SwiftUI 의 변경 감지가 더 안정적임 (특정 iOS 버전에서 destination-based NavigationLink 가
-    /// 새 인스턴스 할당을 무시하는 케이스가 있음).
+    /// 같은 탭을 다시 탭했을 때 호출 — NavigationStack 을 root 로 pop + 스크롤 최상단.
+    /// path 는 동일 인스턴스 mutate (`removeLast(count)`) 로 처리 — 새 인스턴스 할당
+    /// (`= NavigationPath()`) 보다 SwiftUI 의 변경 감지가 안정적.
     func popAndScrollToTop(tab: Int) {
         switch tab {
         case 0:
@@ -58,6 +57,8 @@ final class NavigationCoordinator: ObservableObject {
         default:
             break
         }
+        // 스크롤 최상단 트리거 — 각 ListView 가 .onChange(of: scrollToTopTokens[N]) 로 감지
+        // (사용자 요청: 스크롤 후 같은 탭 재탭 시 최상단으로 복귀)
         scrollToTopTokens[tab] = UUID()
     }
 }

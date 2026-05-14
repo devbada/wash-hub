@@ -11,6 +11,9 @@ struct EquipmentListView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var navCoordinator: NavigationCoordinator
     @State private var equipments: [Equipment] = []
+    /// 현재 스크롤 위치 — 같은 탭 재탭 시 조건부 scrollTo 판단용 (CONVENTIONS.md 6.1)
+    @State private var currentScrollY: CGFloat = 0
+    private let scrollToTopThreshold: CGFloat = 200
     @State private var isLoading = true
     @State private var searchText = ""
     @State private var selectedCategory = "전체"
@@ -109,12 +112,19 @@ struct EquipmentListView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, 16)
                             }
-                            // 동일 탭(케미컬=3) 재탭 → 최상단으로 스크롤
-                            // (pop-to-root 는 NavigationCoordinator 가 path 직접 비워 처리)
+                            // 동일 탭(케미컬=3) 재탭 → 조건부 스크롤 최상단
+                            // 200pt 이상 스크롤 다운 했을 때만 scrollTo (sticky toggle 부수 효과 회피)
                             .onChange(of: navCoordinator.scrollToTopTokens[3]) { _, _ in
+                                guard currentScrollY > scrollToTopThreshold else { return }
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     scrollProxy.scrollTo("top", anchor: .top)
                                 }
+                            }
+                            // 스크롤 위치 추적 — 조건부 scrollTo 판단용
+                            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                                geometry.contentOffset.y
+                            } action: { _, newValue in
+                                currentScrollY = newValue
                             }
                         }
                     }

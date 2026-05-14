@@ -395,7 +395,9 @@ struct FeedDetailView: View {
                             .font(.appCaption)
                     }
                     if let year = car.carYear {
-                        Text("· \(year)년")
+                        // String(year) — Int 직접 interpolation 시 SwiftUI 가 천 단위 콤마(2,026)
+                        // 를 자동 추가하므로 명시적 String 변환으로 회피
+                        Text("· \(String(year))년")
                             .font(.appCaption)
                     }
                 }

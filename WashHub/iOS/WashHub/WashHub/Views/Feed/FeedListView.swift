@@ -19,6 +19,10 @@ struct FeedListView: View {
     @State private var heartAnimationFeedId: String?
     /// 스크롤 idle 감지용 — 일정 시간 추가 스크롤 없으면 탭바 자동 표시
     @State private var scrollIdleTask: Task<Void, Never>?
+    /// 현재 스크롤 contentOffset.y — 같은 탭 재탭 시 조건부 scrollTo 판단용
+    @State private var currentScrollY: CGFloat = 0
+    /// scrollTo 발동 임계값 — 이미 최상단 근처면 sticky toggle 부수 효과 회피
+    private let scrollToTopThreshold: CGFloat = 200
     @ObservedObject private var notificationService = NotificationService.shared
 
     /// 차단 사용자 필터링된 피드 목록
@@ -38,7 +42,7 @@ struct FeedListView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // 커스텀 헤더 (navigationBar 대체)
+                    // 커스텀 헤더 (navigationBar 대체) — 스크롤 다운 시 자동 숨김
                     HStack(alignment: .center) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("WashHub")
@@ -49,7 +53,6 @@ struct FeedListView: View {
 
                         Spacer()
 
-                        // 검색 버튼
                         NavigationLink(destination: SearchView().environmentObject(authManager)) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 16, weight: .medium))
@@ -57,10 +60,7 @@ struct FeedListView: View {
                         }
                         .padding(.trailing, 4)
 
-                        // 새로고침 버튼
-                        Button(action: {
-                            loadId = UUID()
-                        }) {
+                        Button(action: { loadId = UUID() }) {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(feedService.isLoading ? .theme.textDisabled : .theme.textSecondary)
@@ -68,7 +68,6 @@ struct FeedListView: View {
                         .disabled(feedService.isLoading)
                         .padding(.trailing, 4)
 
-                        // 알림 벨 아이콘
                         if !authManager.isGuest {
                             NavigationLink(destination: NotificationListView().environmentObject(authManager)) {
                                 ZStack(alignment: .topTrailing) {
@@ -104,7 +103,16 @@ struct FeedListView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .padding(.bottom, 4)
+                    // 헤더와 첫 콘텐츠(세차지수 카드) 사이를 의도된 spacing 으로 안정화.
+                    // NavigationStack 의 reserved 영역이 첫 진입/재탭 시 가변적으로 잡히지만,
+                    // 명시적 padding 으로 시각 차이를 최소화 + 의도된 디자인처럼 인지되도록.
+                    .padding(.bottom, 16)
+                    // 헤더 자체에 background 적용 — 위쪽(status bar 영역) 까지 확장해 헤더가
+                    // 단일 surface 영역으로 자연스럽게 인지되도록 (공백을 헤더 일부로 흡수)
+                    .background(
+                        Color.theme.surface
+                            .ignoresSafeArea(edges: .top)
+                    )
 
                     // 컨텐츠 — 세차지수 위젯은 피드 유무와 무관하게 항상 상단 노출
                     ScrollViewReader { scrollProxy in
@@ -181,10 +189,19 @@ struct FeedListView: View {
                         // .refreshable spinner가 자연스럽게 닫히도록 약간 대기
                         try? await Task.sleep(nanoseconds: 300_000_000)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // 동일 탭(피드) 재탭 → 스크롤 최상단 (pop-to-root 는 NavigationCoordinator
-                    // 가 path 를 직접 비워 처리하므로 여기서는 스크롤만 책임)
+                    // NavigationStack 안의 ScrollView 가 자동으로 추가하는 top contentInset
+                    // (navigation bar 자리만큼) 을 명시적 0 으로 override. iOS 17+ API.
+                    // 이게 진짜 "헤더 아래 공백" 의 원인이었던 듯.
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    // 가상 아이템 방식(BottomTabBarSpacer) 이전 padding/safeAreaInset 시도의
+                    // 흔적인 `.frame(maxHeight: .infinity)` 제거 — NavigationStack 의 reserved
+                    // 영역과 충돌해 상단에 공백 잡히는 원인 중 하나였음.
+                    // ScrollView 는 부모 VStack 의 잔여 공간을 자동으로 차지함.
+                    // 동일 탭(피드) 재탭 → 조건부로 스크롤 최상단.
+                    // 사용자가 충분히 아래로 스크롤한 상태(임계값 이상)일 때만 scrollTo 호출.
+                    // 이미 최상단 근처면 호출 안 함 — sticky toggle 부수 효과(콘텐츠 끌어올림) 회피.
                     .onChange(of: navCoordinator.scrollToTopTokens[0]) { _, _ in
+                        guard currentScrollY > scrollToTopThreshold else { return }
                         withAnimation(.easeInOut(duration: 0.3)) {
                             scrollProxy.scrollTo("top", anchor: .top)
                         }
@@ -197,6 +214,8 @@ struct FeedListView: View {
                     .onScrollGeometryChange(for: CGFloat.self) { geometry in
                         geometry.contentOffset.y
                     } action: { oldValue, newValue in
+                        // 조건부 scrollTo 판단용 — 현재 위치 추적
+                        currentScrollY = newValue
                         let delta = newValue - oldValue
                         if abs(delta) < 4 { return }
                         let scrollingDown = delta > 0
@@ -236,7 +255,7 @@ struct FeedListView: View {
                     FeedDetailView(feedId: feedId)
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
             Button("로그인하기") {

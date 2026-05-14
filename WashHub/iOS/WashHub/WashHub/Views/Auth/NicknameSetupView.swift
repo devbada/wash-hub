@@ -9,8 +9,15 @@ struct NicknameSetupView: View {
     @State private var errorMessage: String?
     @State private var showLogoutAlert = false
 
+    /// 실시간 형식 검증 (길이 + 문자만). 욕설·사칭은 저장 직전에만 검사 (UX 우선)
+    private var validationResult: Result<String, NicknameValidator.ValidationError> {
+        Result { try NicknameValidator.validateFormat(nickname, minLength: 2, maxLength: 10) }
+            .mapError { ($0 as? NicknameValidator.ValidationError) ?? .empty }
+    }
+
     private var isValid: Bool {
-        nickname.count >= 2 && nickname.count <= 10
+        if case .success = validationResult { return true }
+        return false
     }
 
     private var canSubmit: Bool {
@@ -67,15 +74,15 @@ struct NicknameSetupView: View {
                             .stroke(statusBorderColor, lineWidth: 1)
                     )
 
-                    // 상태 메시지
-                    if isChecked {
+                    // 상태 메시지 — 형식 에러 우선, 그 다음 중복 결과
+                    if !nickname.isEmpty, case .failure(let err) = validationResult {
+                        Text(err.userMessage)
+                            .font(.appSmall)
+                            .foregroundColor(.theme.error)
+                    } else if isChecked {
                         Text(isDuplicate ? "이미 사용 중인 닉네임입니다" : "사용 가능한 닉네임입니다")
                             .font(.appSmall)
                             .foregroundColor(isDuplicate ? .theme.error : .theme.tertiary)
-                    } else if !nickname.isEmpty && !isValid {
-                        Text("닉네임은 2~10자로 입력해주세요")
-                            .font(.appSmall)
-                            .foregroundColor(.theme.error)
                     }
 
                     if let errorMessage = errorMessage {
@@ -146,7 +153,16 @@ struct NicknameSetupView: View {
         errorMessage = nil
         Task {
             do {
-                try await authManager.updateNickname(nickname)
+                // 1) 저장 직전 전체 검증 — 형식 + 욕설 사전 + 사칭 (걸리면 실패)
+                let validated = try NicknameValidator.validate(nickname, minLength: 2, maxLength: 10)
+
+                // 2) 원격 욕설 검증 (Edge Function nickname-validate, korcen)
+                try await NicknameValidator.validateProfanityRemote(validated)
+
+                // 3) 닉네임 저장
+                try await authManager.updateNickname(validated)
+            } catch let err as NicknameValidator.ValidationError {
+                errorMessage = err.userMessage
             } catch {
                 // TODO-minam: 세션 만료/FK 위반 등 구체적 에러 분기 추가 고려
                 print("닉네임 설정 에러: \(error)")

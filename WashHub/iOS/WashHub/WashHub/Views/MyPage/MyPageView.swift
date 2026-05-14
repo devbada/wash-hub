@@ -814,12 +814,15 @@ struct EditProfileView: View {
     }
 
     private func saveProfile() {
-        let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // 유효성: 닉네임 길이 2~20
-        guard trimmedNickname.count >= 2, trimmedNickname.count <= 20 else {
-            // TODO-minam: 공통 유효성 메시지 토스트로 전환
-            errorMessage = "닉네임은 2~20자로 입력해주세요."
+        // 형식·금칙어 검증 (NicknameValidator) — CONVENTIONS.md 9. 참조
+        let trimmedNickname: String
+        do {
+            trimmedNickname = try NicknameValidator.validate(nickname, minLength: 2, maxLength: 20)
+        } catch let err as NicknameValidator.ValidationError {
+            errorMessage = err.userMessage
+            return
+        } catch {
+            errorMessage = "닉네임 검증 중 오류가 발생했어요. 다시 시도해주세요."
             return
         }
 
@@ -833,6 +836,15 @@ struct EditProfileView: View {
                     let isDuplicate = try await authManager.checkNicknameDuplicate(trimmedNickname)
                     if isDuplicate {
                         errorMessage = "이미 사용 중인 닉네임입니다."
+                        isLoading = false
+                        return
+                    }
+
+                    // 1-1. 원격 욕설 검증 (Edge Function nickname-validate) — 변경된 경우만
+                    do {
+                        try await NicknameValidator.validateProfanityRemote(trimmedNickname)
+                    } catch let err as NicknameValidator.ValidationError {
+                        errorMessage = err.userMessage
                         isLoading = false
                         return
                     }

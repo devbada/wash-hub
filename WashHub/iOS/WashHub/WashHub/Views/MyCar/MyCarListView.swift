@@ -14,6 +14,9 @@ struct MyCarListView: View {
     @State private var isLoading = true
     @State private var showAddCar = false
     @State private var showStats = false
+    /// 현재 스크롤 위치 — 같은 탭 재탭 시 조건부 scrollTo 판단용 (CONVENTIONS.md 6.1)
+    @State private var currentScrollY: CGFloat = 0
+    private let scrollToTopThreshold: CGFloat = 200
 
     var body: some View {
         NavigationStack(path: $navCoordinator.myCarPath) {
@@ -116,11 +119,19 @@ struct MyCarListView: View {
         } message: {
             Text("\(deletingCar?.carModel ?? "이 차량")을 삭제하시겠습니까?\n관련 세차 기록도 함께 삭제됩니다.")
         }
-        // 동일 탭(내차=4) 재탭 → 최상단으로 스크롤
+        // 동일 탭(내차=4) 재탭 → 조건부 스크롤 최상단
+        // 200pt 이상 스크롤 다운 했을 때만 scrollTo (sticky toggle 부수 효과 회피)
         .onChange(of: navCoordinator.scrollToTopTokens[4]) { _, _ in
+            guard currentScrollY > scrollToTopThreshold else { return }
             withAnimation(.easeInOut(duration: 0.3)) {
                 scrollProxy.scrollTo("top", anchor: .top)
             }
+        }
+        // 스크롤 위치 추적 — 조건부 scrollTo 판단용
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y
+        } action: { _, newValue in
+            currentScrollY = newValue
         }
         } // ScrollViewReader 닫기
     }
@@ -237,7 +248,8 @@ struct MyCarCard: View {
                         Text(color).font(.appSmall).foregroundColor(.theme.textSecondary)
                     }
                     if let year = car.carYear {
-                        Text("\(year)년").font(.appSmall).foregroundColor(.theme.textSecondary)
+                        // String(year) — Int interpolation 시 천 단위 콤마 자동 추가 회피
+                        Text("\(String(year))년").font(.appSmall).foregroundColor(.theme.textSecondary)
                     }
                 }
             }
