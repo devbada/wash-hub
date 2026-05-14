@@ -196,14 +196,14 @@ struct CreateFeedView: View {
                                 title: "Before",
                                 images: $beforeImages,
                                 maxCount: 1,
-                                onAdd: { hideKeyboard(); activePickerType = .before }
+                                onAdd: { presentPicker(.before) }
                             )
 
                             compactImageSection(
                                 title: "After",
                                 images: $afterImages,
                                 maxCount: 1,
-                                onAdd: { hideKeyboard(); activePickerType = .after }
+                                onAdd: { presentPicker(.after) }
                             )
                         }
 
@@ -243,7 +243,7 @@ struct CreateFeedView: View {
                             subtitle: "과정, 장비, 디테일 등",
                             images: $extraImages,
                             maxCount: 10,
-                            onAdd: { hideKeyboard(); activePickerType = .extra }
+                            onAdd: { presentPicker(.extra) }
                         )
 
                         // 협찬/PPL 설정
@@ -332,11 +332,12 @@ struct CreateFeedView: View {
                 applyPrefillIfNeeded()
                 refreshHashtagSuggestions()
             }
-            .onChange(of: activePickerType) { _, newValue in
-                if newValue != nil {
-                    showImageSourcePicker = true
-                }
-            }
+            // [버그 수정]
+            // 이전: .onChange(of: activePickerType) { newValue in if newValue != nil { showImageSourcePicker = true } }
+            // 같은 값으로 재설정(.before → .before)되면 onChange 가 발화하지 않아
+            // 취소 후 같은 버튼을 다시 누르면 시트가 안 열리는 버그가 있었다.
+            // → 버튼 액션(presentPicker)에서 두 상태를 직접 함께 토글하도록 변경했고
+            //   onChange 인다이렉션은 제거함.
             // 본문/세차방식 — 타이핑 중 키스트로크마다 호출되므로 디바운스(400ms)로 입력 끊김 방지
             .onChange(of: content) { _, _ in scheduleHashtagRefresh() }
             .onChange(of: washMethod) { _, _ in scheduleHashtagRefresh() }
@@ -683,6 +684,16 @@ struct CreateFeedView: View {
         )
     }
 
+    // MARK: - 이미지 소스 시트 호출
+    /// Before/After/Extra 버튼에서 공통으로 호출되는 진입점.
+    /// activePickerType 과 showImageSourcePicker 를 직접 함께 토글하여
+    /// 같은 버튼 연속 탭(이전 값으로 재설정) 시에도 시트가 항상 다시 뜨도록 보장한다.
+    private func presentPicker(_ type: ImagePickerType) {
+        hideKeyboard()
+        activePickerType = type
+        showImageSourcePicker = true
+    }
+
     // MARK: - 피드 제출
     private func submitFeed() {
         isLoading = true
@@ -892,13 +903,21 @@ struct ImageSourcePicker: View {
 
             // 얼굴 + 번호판 자동 검출 — 결과 무관하게 항상 편집 화면 진입
             // 사용자가 직접 가리고 싶은 영역(미인식 사람, 위치 정보 등)을 추가할 수 있도록 함
+            //
+            // ⚠️ orientation 정규화 (.up 으로 픽셀에 회전 베이크)
+            // 카메라 사진은 `imageOrientation = .right` 처럼 cgImage 픽셀과 표시 방향이 다른 경우가 많다.
+            // Vision 은 cgImage 픽셀 공간 기준으로 검출하고, SwiftUI 는 oriented 표시 공간에서 그린다.
+            // 두 공간이 어긋나면 박스가 엉뚱한 위치에 표시된다(모자이크는 CIImage 파이프라인이 자체적으로 보정).
+            // 진입 직후 정규화하여 cgImage 크기 == image.size 가 되도록 맞춰 좌표계를 통일한다.
+            let normalizedImage = image.normalizedOrientation()
+
             moderationMessage = "민감 영역 감지 중..."
-            let areas = await FaceMosaicService.shared.detectSensitiveAreasForEditor(in: image)
+            let areas = await FaceMosaicService.shared.detectSensitiveAreasForEditor(in: normalizedImage)
 
             await MainActor.run {
                 showProcessing = false
                 // 자동 검출 0건이어도 사용자가 수동 모자이크/건너뛰기 결정하도록 항상 편집 화면 진입
-                faceEditorImage = image
+                faceEditorImage = normalizedImage
                 detectedFaces = areas
                 showFaceEditor = true
             }

@@ -47,6 +47,23 @@ extension UIImage {
     func thumbnailJpegData(maxDimension: CGFloat = 400) -> Data? {
         return jpegDataUnder(maxDimension: maxDimension, maxBytes: 300 * 1024)
     }
+
+    /// EXIF orientation 정보를 픽셀에 베이크하여 `.up` orientation 의 새 UIImage 를 반환.
+    ///
+    /// 카메라로 찍은 세로 사진은 `imageOrientation = .right` 처럼 픽셀은 가로로 저장되고
+    /// 표시할 때 회전되는 경우가 흔하다. 이 경우 `cgImage.width/height` 와 `image.size` 가 다르고,
+    /// Vision/CoreImage 등 CGImage 픽셀 공간을 쓰는 API 와 SwiftUI 표시 공간이 어긋난다.
+    /// 모자이크 편집처럼 좌표 변환이 정확해야 하는 시나리오에서는 진입 직후 이 메서드로
+    /// 정규화하면 `cgImage` 크기 == `image.size` 가 되어 모든 좌표계가 일치한다.
+    func normalizedOrientation() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = scale
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
 }
 
 // MARK: - 공통 View Modifier (Electric Neon Premium Design System)

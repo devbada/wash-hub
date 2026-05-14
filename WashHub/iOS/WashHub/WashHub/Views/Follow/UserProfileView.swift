@@ -16,6 +16,8 @@ struct UserProfileView: View {
     @State private var followListTab: FollowListView.FollowTab = .followers
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
+    /// 신고 완료 후 띄우는 "차단할까요?" 제안용 alert flag (직접 차단 메뉴와 분리)
+    @State private var showPostReportBlockConfirm = false
     @State private var showBlockedToast = false
     @ObservedObject private var blockService = BlockService.shared
     @Environment(\.presentationMode) var presentationMode
@@ -72,7 +74,12 @@ struct UserProfileView: View {
             ReportSheet(
                 targetType: .user,
                 targetId: userId,
-                onReported: nil
+                onReported: {
+                    // 시트 dismiss 와 alert 표시가 겹치지 않도록 짧은 지연 후 트리거
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showPostReportBlockConfirm = true
+                    }
+                }
             )
         }
         .alert("사용자 차단", isPresented: $showBlockConfirm) {
@@ -97,6 +104,28 @@ struct UserProfileView: View {
             }
         } message: {
             Text("\(profile?.displayName ?? "이 사용자")를 차단하시겠습니까?\n차단하면 해당 사용자의 피드와 댓글이 표시되지 않습니다.")
+        }
+        // 신고 직후 차단 유도 — ReportSheet onReported 콜백에서 트리거됨
+        .alert("이 사용자를 차단할까요?", isPresented: $showPostReportBlockConfirm) {
+            Button("아니요", role: .cancel) {}
+            Button("차단", role: .destructive) {
+                Task {
+                    try? await blockService.blockUser(blockedId: userId)
+                    NotificationCenter.default.post(
+                        name: .userBlocked,
+                        object: nil,
+                        userInfo: ["blockedId": userId]
+                    )
+                    withAnimation(.spring()) {
+                        showBlockedToast = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        } message: {
+            Text("신고가 접수되었습니다. 추가로 차단하여 해당 사용자의 피드와 댓글이 더 이상 표시되지 않도록 할까요?")
         }
         .overlay(alignment: .top) {
             if showBlockedToast {

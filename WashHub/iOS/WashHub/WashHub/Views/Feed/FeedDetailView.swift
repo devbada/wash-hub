@@ -24,6 +24,8 @@ struct FeedDetailView: View {
     @State private var showReportCommentSheet = false
     @State private var reportTargetCommentId: String?
     @State private var showBlockConfirm = false
+    /// 신고 직후 띄우는 "차단할까요?" 제안용 alert flag (직접 차단 메뉴와 분리)
+    @State private var showPostReportBlockConfirm = false
     @State private var blockTargetUserId: String?
     @State private var blockTargetName: String?
     @State private var showBlockedToast = false
@@ -144,21 +146,32 @@ struct FeedDetailView: View {
                 }
             }
         }
-        // 피드 신고 시트
+        // 피드 신고 시트 — 완료 후 "차단할까요?" 제안 트리거
+        // ⚠️ 시트 dismiss 와 alert 표시가 같은 RunLoop 에 겹치면 SwiftUI 가 alert 를 무시할 수 있어
+        // 짧은 지연으로 시트 애니메이션 완료 후 alert 가 뜨도록 분리한다.
         .sheet(isPresented: $showReportSheet) {
             ReportSheet(
                 targetType: .feed,
                 targetId: feedId,
-                onReported: nil
+                onReported: {
+                    // blockTargetUserId/Name 은 신고 버튼 탭 시 미리 세팅됨
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showPostReportBlockConfirm = true
+                    }
+                }
             )
         }
-        // 댓글 신고 시트
+        // 댓글 신고 시트 — 동일하게 차단 제안 트리거
         .sheet(isPresented: $showReportCommentSheet) {
             if let commentId = reportTargetCommentId {
                 ReportSheet(
                     targetType: .comment,
                     targetId: commentId,
-                    onReported: nil
+                    onReported: {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            showPostReportBlockConfirm = true
+                        }
+                    }
                 )
             }
         }
@@ -191,6 +204,34 @@ struct FeedDetailView: View {
             }
         } message: {
             Text("\(blockTargetName ?? "이 사용자")를 차단하시겠습니까?\n차단하면 해당 사용자의 피드와 댓글이 표시되지 않습니다.")
+        }
+        // 신고 직후 차단 유도 — ReportSheet onReported 콜백에서 트리거됨
+        .alert("이 사용자를 차단할까요?", isPresented: $showPostReportBlockConfirm) {
+            Button("아니요", role: .cancel) {
+                // 차단 대상 정보 정리 — 메뉴 재진입 시 stale 값 노출 방지
+                blockTargetUserId = nil
+                blockTargetName = nil
+            }
+            Button("차단", role: .destructive) {
+                guard let targetId = blockTargetUserId else { return }
+                Task {
+                    try? await blockService.blockUser(blockedId: targetId)
+                    await commentService.loadComments(feedId: feedId)
+                    if targetId == feed?.userId {
+                        withAnimation(.spring()) { showBlockedToast = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    } else {
+                        withAnimation(.spring()) { showBlockedToast = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            withAnimation { showBlockedToast = false }
+                        }
+                    }
+                }
+            }
+        } message: {
+            Text("신고가 접수되었습니다. 추가로 차단하여 해당 사용자의 피드와 댓글이 더 이상 표시되지 않도록 할까요?")
         }
         .task {
             feed = await feedService.loadFeed(id: feedId)
@@ -341,7 +382,12 @@ struct FeedDetailView: View {
                 } else if !authManager.isGuest {
                     // 타인 글: 신고/차단
                     Menu {
-                        Button(action: { showReportSheet = true }) {
+                        Button(action: {
+                            // 신고 후 "차단할까요?" 제안에 사용할 작성자 정보 미리 세팅
+                            blockTargetUserId = feed.userId
+                            blockTargetName = feed.profiles?.displayName ?? "이 사용자"
+                            showReportSheet = true
+                        }) {
                             Label("피드 신고", systemImage: "exclamationmark.triangle")
                         }
                         Button(role: .destructive, action: {
@@ -475,6 +521,9 @@ struct FeedDetailView: View {
                         },
                         onReport: {
                             reportTargetCommentId = comment.id
+                            // 신고 후 차단 제안 대상으로 댓글 작성자를 미리 지정
+                            blockTargetUserId = comment.userId
+                            blockTargetName = comment.profiles?.displayName ?? "이 사용자"
                             showReportCommentSheet = true
                         },
                         onBlock: {

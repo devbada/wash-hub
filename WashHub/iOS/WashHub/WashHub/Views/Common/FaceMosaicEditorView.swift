@@ -116,15 +116,22 @@ struct FaceMosaicEditorView: View {
         GeometryReader { geo in
             let imgW = originalImage.size.width
             let imgH = originalImage.size.height
-            let scaleX = geo.size.width / imgW
-            let scaleY = geo.size.height / imgH
+            // scaledToFit 으로 인한 letterbox/pillarbox 영역을 계산.
+            // 이미지가 실제로 표시되는 사각형(imageDisplayRect)을 기준으로 좌표 변환해야
+            // 사용자가 드래그한 영역과 적용되는 모자이크 영역이 정확히 일치함.
+            let imageDisplayRect = computeImageDisplayRect(
+                imageSize: CGSize(width: imgW, height: imgH),
+                containerSize: geo.size
+            )
+            let scaleX = imageDisplayRect.width / imgW
+            let scaleY = imageDisplayRect.height / imgH
 
             ZStack(alignment: .topLeading) {
-                // 기존 영역 박스 (자동 감지 + 수동)
+                // 기존 영역 박스 (자동 감지 + 수동) — imageDisplayRect.origin 으로 offset 보정
                 ForEach(Array(detectedFaces.enumerated()), id: \.element.id) { index, face in
                     let rect = face.uiRect
-                    let x = rect.origin.x * scaleX
-                    let y = rect.origin.y * scaleY
+                    let x = imageDisplayRect.origin.x + rect.origin.x * scaleX
+                    let y = imageDisplayRect.origin.y + rect.origin.y * scaleY
                     let w = rect.size.width * scaleX
                     let h = rect.size.height * scaleY
 
@@ -153,28 +160,50 @@ struct FaceMosaicEditorView: View {
                         .gesture(
                             DragGesture(minimumDistance: 10)
                                 .onChanged { value in
-                                    // 이미지 영역 내로 클램프
+                                    // 이미지 실제 표시 영역(imageDisplayRect) 내로 클램프 —
+                                    // letterbox/pillarbox 영역에서 드래그 시작/끝 못 잡도록
                                     let clamped = CGPoint(
-                                        x: min(max(value.location.x, 0), geo.size.width),
-                                        y: min(max(value.location.y, 0), geo.size.height)
+                                        x: min(max(value.location.x, imageDisplayRect.minX), imageDisplayRect.maxX),
+                                        y: min(max(value.location.y, imageDisplayRect.minY), imageDisplayRect.maxY)
                                     )
                                     if dragStart == nil {
                                         dragStart = CGPoint(
-                                            x: min(max(value.startLocation.x, 0), geo.size.width),
-                                            y: min(max(value.startLocation.y, 0), geo.size.height)
+                                            x: min(max(value.startLocation.x, imageDisplayRect.minX), imageDisplayRect.maxX),
+                                            y: min(max(value.startLocation.y, imageDisplayRect.minY), imageDisplayRect.maxY)
                                         )
                                     }
                                     dragCurrent = clamped
                                 }
                                 .onEnded { _ in
                                     commitDragRegion(
-                                        containerSize: geo.size,
+                                        imageDisplayRect: imageDisplayRect,
                                         imageSize: CGSize(width: imgW, height: imgH)
                                     )
                                 }
                         )
                 }
             }
+        }
+    }
+
+    /// scaledToFit 으로 표시될 때 이미지의 실제 표시 사각형 계산.
+    /// 이미지 종횡비가 컨테이너보다 가로 우세면 위/아래에 letterbox,
+    /// 세로 우세면 좌/우에 pillarbox 가 생김.
+    private func computeImageDisplayRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
+        let imageRatio = imageSize.width / imageSize.height
+        let containerRatio = containerSize.width / containerSize.height
+        if imageRatio > containerRatio {
+            // 가로 우세 → 컨테이너 가로 채움, 위/아래 letterbox
+            let displayWidth = containerSize.width
+            let displayHeight = displayWidth / imageRatio
+            let originY = (containerSize.height - displayHeight) / 2
+            return CGRect(x: 0, y: originY, width: displayWidth, height: displayHeight)
+        } else {
+            // 세로 우세 → 컨테이너 세로 채움, 좌/우 pillarbox
+            let displayHeight = containerSize.height
+            let displayWidth = displayHeight * imageRatio
+            let originX = (containerSize.width - displayWidth) / 2
+            return CGRect(x: originX, y: 0, width: displayWidth, height: displayHeight)
         }
     }
 
@@ -321,8 +350,9 @@ struct FaceMosaicEditorView: View {
         return CGRect(x: x, y: y, width: w, height: h)
     }
 
-    /// 드래그 완료 → 수동 모자이크 영역 추가
-    private func commitDragRegion(containerSize: CGSize, imageSize: CGSize) {
+    /// 드래그 완료 → 수동 모자이크 영역 추가.
+    /// 좌표 변환: 컨테이너 좌표 → imageDisplayRect 기준(letterbox 빼고) → 원본 이미지 좌표
+    private func commitDragRegion(imageDisplayRect: CGRect, imageSize: CGSize) {
         guard let start = dragStart, let current = dragCurrent else {
             dragStart = nil
             dragCurrent = nil
@@ -338,13 +368,15 @@ struct FaceMosaicEditorView: View {
             return
         }
 
-        // 화면 좌표 → 이미지 좌표
-        let scaleX = imageSize.width / containerSize.width
-        let scaleY = imageSize.height / containerSize.height
+        // 표시 좌표 → 원본 이미지 좌표
+        // 1) 컨테이너 기준 좌표에서 imageDisplayRect.origin 을 빼서 표시 영역 기준 좌표로
+        // 2) 표시 영역 크기 → 원본 이미지 크기 비율로 변환
+        let scaleX = imageSize.width / imageDisplayRect.width
+        let scaleY = imageSize.height / imageDisplayRect.height
 
         let imgRect = CGRect(
-            x: displayRect.origin.x * scaleX,
-            y: displayRect.origin.y * scaleY,
+            x: (displayRect.origin.x - imageDisplayRect.origin.x) * scaleX,
+            y: (displayRect.origin.y - imageDisplayRect.origin.y) * scaleY,
             width: displayRect.width * scaleX,
             height: displayRect.height * scaleY
         )
