@@ -97,8 +97,12 @@ struct CoachmarkOverlay: View {
 
     @ViewBuilder
     private func tooltip(step: CoachmarkStep, spotlight: CGRect?, screen: CGSize) -> some View {
-        let bubble = TooltipBubble(step: step)
-            .frame(maxWidth: min(Self.tooltipMaxWidth, screen.width - 48))
+        let bubble = TooltipBubble(
+            step: step,
+            nextButtonTitle: isLastStep ? "시작하기" : "다음",
+            onNext: { controller.next() }
+        )
+        .frame(maxWidth: min(Self.tooltipMaxWidth, screen.width - 48))
 
         let position = tooltipPosition(spotlight: spotlight, screen: screen)
         bubble
@@ -106,30 +110,20 @@ struct CoachmarkOverlay: View {
             .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }
 
-    /// 강조 영역의 위/아래 어디에 말풍선을 둘지 — 화면 절반 기준 자동 결정
+    /// 말풍선 위치 — 화면 중앙 고정.
+    /// spotlight 영역은 어둑한 배경의 컷아웃(하이라이트) 으로 별도 시각화되므로
+    /// 말풍선을 spotlight 옆에 붙일 필요가 없다. 중앙 고정으로 일관성 확보.
     private func tooltipPosition(spotlight: CGRect?, screen: CGSize) -> CGPoint {
-        guard let rect = spotlight else {
-            // 가운데
-            return CGPoint(x: screen.width / 2, y: screen.height / 2)
-        }
-        let bubbleHeightEstimate: CGFloat = 140
-        let gap: CGFloat = 24
-        let above = rect.minY - gap - bubbleHeightEstimate / 2
-        let below = rect.maxY + gap + bubbleHeightEstimate / 2
-
-        // 강조 영역이 화면 하단에 있으면 위쪽에, 상단에 있으면 아래쪽에 배치
-        let preferAbove = rect.midY > screen.height / 2
-        let y: CGFloat = preferAbove
-            ? max(above, bubbleHeightEstimate / 2 + 32)
-            : min(below, screen.height - bubbleHeightEstimate / 2 - 80)
-
-        return CGPoint(x: screen.width / 2, y: y)
+        return CGPoint(x: screen.width / 2, y: screen.height / 2)
     }
 
     // MARK: - 컨트롤 바
 
+    /// 컨트롤바 — 좌측 건너뛰기 + 우측 진행 dots.
+    /// Next 버튼은 말풍선 안에 통합되어 있어 여기서는 제거.
+    /// (Next 와 말풍선이 겹치는 문제를 시각적으로 명확히 분리)
     private var controlBar: some View {
-        HStack(spacing: 16) {
+        HStack {
             Button(action: { controller.skip() }) {
                 Text("건너뛰기")
                     .font(.appLabel)
@@ -140,30 +134,16 @@ struct CoachmarkOverlay: View {
 
             Spacer()
 
-            // 진행 dots
             HStack(spacing: 6) {
                 ForEach(controller.steps.indices, id: \.self) { idx in
                     Circle()
                         .fill(idx == controller.currentIndex
-                              ? Color(red: 132/255, green: 204/255, blue: 22/255)  // Citrus
+                              ? Color(red: 132/255, green: 204/255, blue: 22/255)
                               : Color.white.opacity(0.4))
                         .frame(width: 8, height: 8)
                 }
             }
-
-            Spacer()
-
-            Button(action: { controller.next() }) {
-                Text(isLastStep ? "시작하기" : "다음")
-                    .font(.appBodyBold)
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 12)
-                    .background(
-                        Capsule()
-                            .fill(Color(red: 132/255, green: 204/255, blue: 22/255))  // Citrus
-                    )
-            }
+            .padding(.trailing, 14)
         }
     }
 
@@ -176,16 +156,38 @@ struct CoachmarkOverlay: View {
 
 private struct TooltipBubble: View {
     let step: CoachmarkStep
+    let nextButtonTitle: String
+    let onNext: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(step.title)
-                .font(.appHeadline3)
-                .foregroundColor(.theme.textPrimary)
-            Text(step.message)
-                .font(.appBody)
-                .foregroundColor(.theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 14) {
+            // 제목 + 본문
+            VStack(alignment: .leading, spacing: 8) {
+                Text(step.title)
+                    .font(.appHeadline3)
+                    .foregroundColor(.theme.textPrimary)
+                Text(step.message)
+                    .font(.appBody)
+                    .foregroundColor(.theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Next 버튼 — 말풍선 우측 하단에 통합
+            // (이전: controlBar 에 Next 버튼 있었음 → 말풍선과 시각적 겹침)
+            HStack {
+                Spacer()
+                Button(action: onNext) {
+                    Text(nextButtonTitle)
+                        .font(.appBodyBold)
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(Color(red: 132/255, green: 204/255, blue: 22/255))
+                        )
+                }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
