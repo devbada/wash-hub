@@ -88,7 +88,7 @@ final class FollowService: ObservableObject {
         do {
             let persistRows: [FollowerRow] = try await supabase
                 .from("follows")
-                .select("follower_id, following_id, created_at, follower:profiles!follows_follower_id_fkey(id, nickname, avatar_url, bio, follower_count, following_count, title_badge_id)")
+                .select("follower_id, following_id, created_at, follower:profiles!follows_follower_id_fkey(id, nickname, avatar_url, bio, follower_count, following_count, title_badge_id, deleted_at)")
                 .eq("following_id", value: userId)
                 .order("created_at", ascending: false)
                 .range(from: offset, to: offset + pageSize - 1)
@@ -113,7 +113,7 @@ final class FollowService: ObservableObject {
         do {
             let persistRows: [FollowingRow] = try await supabase
                 .from("follows")
-                .select("follower_id, following_id, created_at, following:profiles!follows_following_id_fkey(id, nickname, avatar_url, bio, follower_count, following_count, title_badge_id)")
+                .select("follower_id, following_id, created_at, following:profiles!follows_following_id_fkey(id, nickname, avatar_url, bio, follower_count, following_count, title_badge_id, deleted_at)")
                 .eq("follower_id", value: userId)
                 .order("created_at", ascending: false)
                 .range(from: offset, to: offset + pageSize - 1)
@@ -150,7 +150,7 @@ final class FollowService: ObservableObject {
             // 2) 팔로우한 사용자들의 피드 조회
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at), my_cars(id, car_model, car_color, car_year, nickname)")
                 .eq("status", value: "ACTIVE")
                 .in("user_id", values: followingIds)
                 .order("created_at", ascending: false)
@@ -170,7 +170,7 @@ final class FollowService: ObservableObject {
         do {
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at), my_cars(id, car_model, car_color, car_year, nickname)")
                 .eq("status", value: "ACTIVE")
                 .eq("user_id", value: userId)
                 .order("created_at", ascending: false)

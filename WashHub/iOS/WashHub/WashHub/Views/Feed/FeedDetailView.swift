@@ -380,22 +380,26 @@ struct FeedDetailView: View {
                             .frame(width: 32, height: 32)
                     }
                 } else if !authManager.isGuest {
-                    // 타인 글: 신고/차단
+                    // 타인 글: 신고/차단 메뉴
+                    // 작성자가 탈퇴자인 경우 "사용자 차단" 은 무의미하므로 숨기고,
+                    // 콘텐츠 신고(피드 신고)는 운영자 검토 가능하므로 유지
+                    let authorIsDeleted = feed.profiles?.isDeleted ?? false
                     Menu {
                         Button(action: {
-                            // 신고 후 "차단할까요?" 제안에 사용할 작성자 정보 미리 세팅
                             blockTargetUserId = feed.userId
                             blockTargetName = feed.profiles?.displayName ?? "이 사용자"
                             showReportSheet = true
                         }) {
                             Label("피드 신고", systemImage: "exclamationmark.triangle")
                         }
-                        Button(role: .destructive, action: {
-                            blockTargetUserId = feed.userId
-                            blockTargetName = feed.profiles?.displayName ?? "이 사용자"
-                            showBlockConfirm = true
-                        }) {
-                            Label("사용자 차단", systemImage: "hand.raised")
+                        if !authorIsDeleted {
+                            Button(role: .destructive, action: {
+                                blockTargetUserId = feed.userId
+                                blockTargetName = feed.profiles?.displayName ?? "이 사용자"
+                                showBlockConfirm = true
+                            }) {
+                                Label("사용자 차단", systemImage: "hand.raised")
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -791,7 +795,8 @@ struct CommentRow: View {
                 ellipsisIcon
             }
         } else if isFeedOwner {
-            // 피드 작성자가 타인 댓글을 볼 때: 숨기기 + 신고/차단
+            // 피드 작성자가 타인 댓글을 볼 때: 숨기기 + 신고 + (탈퇴자가 아니면) 차단
+            let authorIsDeleted = comment.profiles?.isDeleted ?? false
             Menu {
                 Button(action: { onHide?() }) {
                     Label("댓글 숨기기", systemImage: "eye.slash")
@@ -799,20 +804,25 @@ struct CommentRow: View {
                 Button(action: { onReport?() }) {
                     Label("댓글 신고", systemImage: "exclamationmark.triangle")
                 }
-                Button(role: .destructive, action: { onBlock?() }) {
-                    Label("사용자 차단", systemImage: "hand.raised")
+                if !authorIsDeleted {
+                    Button(role: .destructive, action: { onBlock?() }) {
+                        Label("사용자 차단", systemImage: "hand.raised")
+                    }
                 }
             } label: {
                 ellipsisIcon
             }
         } else if !isGuest {
-            // 일반 사용자가 타인 댓글을 볼 때: 신고/차단
+            // 일반 사용자가 타인 댓글을 볼 때: 신고 + (탈퇴자가 아니면) 차단
+            let authorIsDeleted = comment.profiles?.isDeleted ?? false
             Menu {
                 Button(action: { onReport?() }) {
                     Label("댓글 신고", systemImage: "exclamationmark.triangle")
                 }
-                Button(role: .destructive, action: { onBlock?() }) {
-                    Label("사용자 차단", systemImage: "hand.raised")
+                if !authorIsDeleted {
+                    Button(role: .destructive, action: { onBlock?() }) {
+                        Label("사용자 차단", systemImage: "hand.raised")
+                    }
                 }
             } label: {
                 ellipsisIcon

@@ -6,6 +6,7 @@ struct WashStatsView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var monthlyStats: [MonthStat] = []
     @State private var topEquipments: [EquipmentStat] = []
+    @State private var topCarWashes: [CarWashStat] = []
     @State private var totalWashCount = 0
     @State private var averageInterval: Double = 0
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
@@ -31,6 +32,9 @@ struct WashStatsView: View {
 
                         // 자주 사용한 용품 TOP 5
                         topEquipmentSection
+
+                        // 자주 방문한 세차장 TOP 5
+                        topCarWashSection
                     }
                     .padding(16)
                 }
@@ -188,6 +192,81 @@ struct WashStatsView: View {
         .cornerRadius(12)
     }
 
+    // MARK: - TOP 5 세차장 (자주 방문한 세차장)
+    /// car_wash_id 가 있는 세차 기록만 집계 (자가세차는 제외)
+    private var topCarWashSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("자주 방문한 세차장")
+                .font(.appHeadline3)
+                .foregroundColor(.theme.textPrimary)
+
+            if topCarWashes.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "building.2")
+                            .font(.system(size: 28))
+                            .foregroundColor(.theme.textDisabled)
+                        Text("방문 기록이 없습니다")
+                            .font(.appCaption)
+                            .foregroundColor(.theme.textDisabled)
+                        Text("세차장에서 세차 기록을 남기면 여기에 표시돼요")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textDisabled)
+                    }
+                    .padding(.vertical, 20)
+                    Spacer()
+                }
+            } else {
+                ForEach(Array(topCarWashes.enumerated()), id: \.element.id) { index, item in
+                    HStack(spacing: 12) {
+                        // 순위
+                        Text("\(index + 1)")
+                            .font(.appHeadline2)
+                            .foregroundColor(index < 3 ? .theme.secondary : .theme.textDisabled)
+                            .frame(width: 28)
+
+                        // 아이콘 (세차장은 이미지 없을 가능성 높아 시각적 일관성 유지용 placeholder)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.theme.surface)
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "drop.fill")
+                                .foregroundColor(.theme.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                                .font(.appBodyMedium)
+                                .foregroundColor(.theme.textPrimary)
+                                .lineLimit(1)
+                            if let address = item.address, !address.isEmpty {
+                                Text(address)
+                                    .font(.appSmall)
+                                    .foregroundColor(.theme.textDisabled)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer()
+
+                        Text("\(item.visitCount)회")
+                            .font(.appBodyBold)
+                            .foregroundColor(.theme.secondary)
+                    }
+                    .padding(.vertical, 4)
+
+                    if index < topCarWashes.count - 1 {
+                        Divider().background(Color.theme.border)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.theme.surfaceHigh)
+        .cornerRadius(12)
+    }
+
     private var emptyChartView: some View {
         HStack {
             Spacer()
@@ -245,6 +324,10 @@ struct WashStatsView: View {
 
             // 4. 자주 사용한 용품 TOP 5
             await loadTopEquipments(userId: userId, startDate: startDate, endDate: endDate)
+
+            // 5. 자주 방문한 세차장 TOP 5 — wash_logs.car_wash_id 가 있는 것만 집계
+            //    이번 연도 persistLogs 를 이미 들고 있으므로 메모리에서 집계 → 추가 쿼리는 car_washes 한 번뿐
+            await loadTopCarWashes(logs: persistLogs)
 
         } catch {
             print("Wash stats load error: \(error)")
@@ -311,6 +394,57 @@ struct WashStatsView: View {
         } catch {
             print("Top equipments load error: \(error)")
             topEquipments = []
+        }
+    }
+
+    /// 선택 연도의 wash_logs 중 car_wash_id 가 있는 것들을 그룹화하여 TOP 5 세차장 산출.
+    /// car_washes 테이블에서 한 번에 이름/주소를 가져와 메모리에서 조합한다. (N+1 회피)
+    private func loadTopCarWashes(logs: [WashLog]) async {
+        // 1) car_wash_id 별 방문 횟수 집계 (nil 인 자가세차는 자동 제외)
+        let visitCounts: [String: Int] = logs.reduce(into: [:]) { dict, log in
+            if let cwId = log.carWashId, !cwId.isEmpty {
+                dict[cwId, default: 0] += 1
+            }
+        }
+
+        guard !visitCounts.isEmpty else {
+            topCarWashes = []
+            return
+        }
+
+        // 2) 상위 5개 ID만 추려서 car_washes 조회
+        let top5Ids = visitCounts
+            .sorted { $0.value > $1.value }
+            .prefix(5)
+            .map { $0.key }
+
+        do {
+            struct CarWashMini: Codable {
+                let id: String
+                let name: String
+                let address: String?
+            }
+            let persistCarWashes: [CarWashMini] = try await supabase
+                .from("car_washes")
+                .select("id, name, address")
+                .in("id", values: top5Ids)
+                .execute()
+                .value
+
+            // 3) ID 순서대로 정렬 보장하면서 모델 생성
+            let nameMap = Dictionary(uniqueKeysWithValues: persistCarWashes.map { ($0.id, $0) })
+            topCarWashes = top5Ids.compactMap { id in
+                guard let cw = nameMap[id], let count = visitCounts[id] else { return nil }
+                return CarWashStat(
+                    id: id,
+                    name: cw.name,
+                    address: cw.address,
+                    visitCount: count
+                )
+            }
+        } catch {
+            print("Top car washes load error: \(error)")
+            topCarWashes = []
         }
     }
 
@@ -411,4 +545,12 @@ struct EquipmentStat: Identifiable {
     let category: String?
     let imageUrl: String?
     let usageCount: Int
+}
+
+/// 자주 방문한 세차장 TOP 5 항목
+struct CarWashStat: Identifiable {
+    let id: String
+    let name: String
+    let address: String?
+    let visitCount: Int
 }

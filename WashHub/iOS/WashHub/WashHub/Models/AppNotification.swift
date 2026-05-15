@@ -77,13 +77,19 @@ struct SenderProfile: Codable {
     let id: String
     let nickname: String?
     let avatarUrl: String?
+    /// 알림 발신자가 이후 탈퇴한 경우 placeholder 표시
+    let deletedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, nickname
         case avatarUrl = "avatar_url"
+        case deletedAt = "deleted_at"
     }
 
+    var isDeleted: Bool { deletedAt != nil }
+
     var displayName: String {
-        nickname ?? "사용자"
+        if isDeleted { return "[탈퇴한 사용자]" }
+        return nickname ?? "사용자"
     }
 }

@@ -104,7 +104,7 @@ final class SearchService: ObservableObject {
         do {
             let persistFeeds: [Feed] = try await supabase
                 .from("feeds")
-                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at), my_cars(id, car_model, car_color, car_year, nickname)")
                 .eq("status", value: "ACTIVE")
                 .or("content.ilike.\(pattern)")
                 .order("created_at", ascending: false)
@@ -161,7 +161,7 @@ final class SearchService: ObservableObject {
         do {
             let persistRoutines: [Routine] = try await supabase
                 .from("routines")
-                .select("*, profiles!user_id(id, nickname, avatar_url, is_official), routine_steps(*)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at), routine_steps(*)")
                 .eq("status", value: "ACTIVE")
                 .or("title.ilike.\(pattern),description.ilike.\(pattern)")
                 .order("created_at", ascending: false)

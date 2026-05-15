@@ -188,8 +188,8 @@ struct FollowUserRow: View {
 
             Spacer()
 
-            // 팔로우 버튼 (자기 자신이면 숨김)
-            if !isMyself {
+            // 팔로우 버튼 (자기 자신이면 숨김, 탈퇴자에게는 비활성)
+            if !isMyself && !user.isDeleted {
                 FollowButton(
                     isFollowing: isFollowing,
                     isLoading: isLoadingFollow,

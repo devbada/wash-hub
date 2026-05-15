@@ -56,6 +56,10 @@ struct MyPageView: View {
             }
         }
         .navigationTitle("마이페이지")
+        // .inline 미지정 시 SwiftUI 가 automatic 으로 동작 → push 시점/스크롤 위치에 따라
+        // large title(좌측 큰 글씨)이 잠시 펼쳐진 상태로 표시되는 transition 글리치 발생.
+        // 다른 화면들과 일관되게 inline 으로 고정.
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showEditProfile, onDismiss: {
             // 프로필 편집 후 최신 프로필 반영 보장
             Task {

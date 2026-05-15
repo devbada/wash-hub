@@ -12,7 +12,7 @@ final class NotificationService: ObservableObject {
 
     private let pageSize = 20
 
-    private let notificationSelect = "*, sender:profiles!fk_notifications_sender_profile(id, nickname, avatar_url)"
+    private let notificationSelect = "*, sender:profiles!fk_notifications_sender_profile(id, nickname, avatar_url, deleted_at)"
 
     // MARK: - 알림 목록 조회
     func loadNotifications(offset: Int = 0, forceRefresh: Bool = false) async {

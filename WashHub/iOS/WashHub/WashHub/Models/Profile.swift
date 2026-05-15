@@ -17,6 +17,8 @@ struct Profile: Identifiable, Codable {
     let updatedAt: String?
     /// 공식 계정 여부 — WashHub 공식 / 협력사 / 검증 사용자 표시용. legacy 데이터는 nil → false 처리
     let isOfficial: Bool?
+    /// 탈퇴 처리 일시. NOT NULL 이면 익명화 보존된 탈퇴자 (재로그인 차단 대상).
+    let deletedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -34,15 +36,22 @@ struct Profile: Identifiable, Codable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case isOfficial = "is_official"
+        case deletedAt = "deleted_at"
     }
 
-    /// 표시용 닉네임 (닉네임 미설정 시 "사용자")
+    /// 표시용 닉네임 (닉네임 미설정 시 "사용자"). 탈퇴자는 placeholder 강제.
     var displayName: String {
-        nickname ?? "사용자"
+        if isDeleted { return "[탈퇴한 사용자]" }
+        return nickname ?? "사용자"
     }
 
     /// 공식 계정 여부 — nil safety 헬퍼
     var isOfficialAccount: Bool {
         isOfficial ?? false
+    }
+
+    /// 탈퇴 처리 여부 — UI 표시 placeholder 적용 + 재로그인 차단 판단용
+    var isDeleted: Bool {
+        deletedAt != nil
     }
 }

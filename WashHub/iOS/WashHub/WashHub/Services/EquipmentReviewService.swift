@@ -14,7 +14,7 @@ final class EquipmentReviewService: ObservableObject {
         do {
             let persistReviews: [EquipmentReview] = try await supabase
                 .from("equipment_reviews")
-                .select("*, profiles!user_id(id, nickname, avatar_url, is_official)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at)")
                 .eq("equipment_id", value: equipmentId)
                 .eq("status", value: "ACTIVE")
                 .order("created_at", ascending: false)
@@ -34,7 +34,7 @@ final class EquipmentReviewService: ObservableObject {
             let session = try await supabase.auth.session
             let persistMyReviews: [EquipmentReview] = try await supabase
                 .from("equipment_reviews")
-                .select("*, profiles!user_id(id, nickname, avatar_url, is_official)")
+                .select("*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at)")
                 .eq("equipment_id", value: equipmentId)
                 .eq("user_id", value: session.user.id.uuidString)
                 .eq("status", value: "ACTIVE")

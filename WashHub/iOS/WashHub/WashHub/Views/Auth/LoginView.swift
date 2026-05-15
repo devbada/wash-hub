@@ -104,6 +104,18 @@ struct LoginView: View {
                     .scaleEffect(1.2)
             }
         }
+        // 탈퇴 처리된 계정으로 재로그인 시도 시 안내 alert
+        // (AuthManager.loadProfile 에서 deletedAt 감지 → signOut + deletedAccountAlertMessage 세팅)
+        .alert("계정 사용 불가", isPresented: Binding(
+            get: { authManager.deletedAccountAlertMessage != nil },
+            set: { if !$0 { authManager.deletedAccountAlertMessage = nil } }
+        )) {
+            Button("확인", role: .cancel) {
+                authManager.deletedAccountAlertMessage = nil
+            }
+        } message: {
+            Text(authManager.deletedAccountAlertMessage ?? "")
+        }
     }
 
     // MARK: - Apple 로그인 처리

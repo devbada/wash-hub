@@ -13,7 +13,7 @@ final class FeedService: ObservableObject {
 
     private let pageSize = 10
 
-    private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url, is_official), my_cars(id, car_model, car_color, car_year, nickname)"
+    private let feedSelect = "*, profiles!user_id(id, nickname, avatar_url, is_official, deleted_at), my_cars(id, car_model, car_color, car_year, nickname)"
 
     // MARK: - 캐시 (첫 페이지만 60초 — pagination 결과는 캐싱 안 함)
     // @StateObject 가 매 뷰마다 인스턴스를 만들기 때문에 static 으로 인스턴스 간 공유한다

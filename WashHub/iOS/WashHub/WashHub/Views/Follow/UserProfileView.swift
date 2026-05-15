@@ -52,8 +52,11 @@ struct UserProfileView: View {
             .environmentObject(authManager)
         }
         .toolbar {
-            // 타인 프로필에서 신고/차단 메뉴
-            if userId != authManager.currentUser?.id && !authManager.isGuest {
+            // 타인 프로필에서 신고/차단 메뉴 — 단, 탈퇴자에 대해서는 무의미하므로 숨김
+            // (서버 트리거가 INSERT 자체를 차단하지만 UX 차원에서 버튼도 안 보이게)
+            if userId != authManager.currentUser?.id
+                && !authManager.isGuest
+                && profile?.isDeleted != true {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button(action: { showReportSheet = true }) {
@@ -209,15 +212,27 @@ struct UserProfileView: View {
                 }
             }
 
-            // 팔로우 버튼 (자기 프로필이 아닐 때)
+            // 팔로우 버튼 (자기 프로필이 아닐 때) — 탈퇴자는 안 보이게 + 안내 표시
             if userId != authManager.currentUser?.id {
-                FollowButton(
-                    isFollowing: isFollowing,
-                    isLoading: isLoadingFollow,
-                    action: {
-                        Task { await toggleFollow() }
+                if profile.isDeleted {
+                    // 탈퇴자 안내 placeholder (인터랙션 자체 비활성)
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.crop.circle.badge.xmark")
+                            .foregroundColor(.theme.textDisabled)
+                        Text("탈퇴한 사용자입니다")
+                            .font(.appCaption)
+                            .foregroundColor(.theme.textDisabled)
                     }
-                )
+                    .padding(.vertical, 8)
+                } else {
+                    FollowButton(
+                        isFollowing: isFollowing,
+                        isLoading: isLoadingFollow,
+                        action: {
+                            Task { await toggleFollow() }
+                        }
+                    )
+                }
             }
         }
     }

@@ -22,6 +22,8 @@ struct FollowUser: Identifiable, Codable {
     let followerCount: Int?
     let followingCount: Int?
     let titleBadgeId: String?
+    /// 탈퇴자 식별 — placeholder 표시 + 인터랙션 비활성용
+    let deletedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -31,10 +33,14 @@ struct FollowUser: Identifiable, Codable {
         case followerCount = "follower_count"
         case followingCount = "following_count"
         case titleBadgeId = "title_badge_id"
+        case deletedAt = "deleted_at"
     }
 
+    var isDeleted: Bool { deletedAt != nil }
+
     var displayName: String {
-        nickname ?? "사용자"
+        if isDeleted { return "[탈퇴한 사용자]" }
+        return nickname ?? "사용자"
     }
 }
 

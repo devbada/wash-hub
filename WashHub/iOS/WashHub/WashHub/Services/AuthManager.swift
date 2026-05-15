@@ -12,6 +12,8 @@ final class AuthManager: ObservableObject {
     @Published var needsTermsAgreement = false
     @Published var needsNicknameSetup = false
     @Published var currentUser: Profile?
+    /// 탈퇴 처리된 계정으로 로그인 시도 시 표시할 안내 (nil 아니면 alert 노출)
+    @Published var deletedAccountAlertMessage: String?
 
     /// 게스트 모드 여부 (로그인 없이 둘러보기)
     var isGuest: Bool { isGuestMode && !isAuthenticated }
@@ -152,6 +154,23 @@ final class AuthManager: ObservableObject {
                 .execute()
                 .value
 
+            // 🛡️ 방어 코드 — 탈퇴 처리된 row 로 로그인된 경우 (정상 흐름에서는 발생하지 않음)
+            //
+            // 정책: 동일 OAuth 계정으로 재가입 가능. withdraw-user 가 auth.identities 의 OAuth 매핑을
+            //       삭제하므로 같은 sub 으로 들어와도 Supabase Auth 가 새 user_id 를 발급한다.
+            //       즉 이 분기는 정상 상황에선 도달하지 않지만, identities 정리 실패 등 예외 케이스
+            //       방어용으로 유지한다.
+            if persistProfile.isDeleted {
+                print("⚠️ 탈퇴 처리된 row 로 로그인됨 (예외 — identities 정리 실패 가능성): \(userId)")
+                try? await supabase.auth.signOut()
+                isAuthenticated = false
+                currentUser = nil
+                needsTermsAgreement = false
+                needsNicknameSetup = false
+                deletedAccountAlertMessage = "이전 탈퇴 정보가 일부 남아있어 로그아웃되었습니다.\n다시 로그인하시면 새 회원으로 가입됩니다."
+                return
+            }
+
             currentUser = persistProfile
             // 약관 미동의 시 약관 동의 화면으로
             needsTermsAgreement = (persistProfile.agreedTermsAt == nil)
@@ -194,7 +213,8 @@ final class AuthManager: ObservableObject {
             agreedTermsAt: nil,
             createdAt: nil,
             updatedAt: nil,
-            isOfficial: false  // fallback 계정은 비공식
+            isOfficial: false,  // fallback 계정은 비공식
+            deletedAt: nil       // fallback 계정은 탈퇴 아님
         )
     }
 
@@ -270,6 +290,9 @@ final class AuthManager: ObservableObject {
         // 다른 사용자가 로그인할 때 이전 사용자의 세차 기록이 캐시에서 보이지 않도록 무효화
         // (DynamicIconService 도 @MainActor 라 동일 컨텍스트 → await 불필요)
         DynamicIconService.shared.invalidateWashLogCache()
+        // 이전 사용자의 단계 아이콘(Stage 2~5)이 그대로 남지 않도록 Primary 로 복원.
+        // updateIconIfNeeded() 는 미로그인 상태에서 setIcon(nil) → Primary 자동 복원함.
+        await DynamicIconService.shared.updateIconIfNeeded()
     }
 
     // MARK: - 회원 탈퇴
