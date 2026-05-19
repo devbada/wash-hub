@@ -234,6 +234,11 @@ struct FeedDetailView: View {
             Text("신고가 접수되었습니다. 추가로 차단하여 해당 사용자의 피드와 댓글이 더 이상 표시되지 않도록 할까요?")
         }
         .task {
+            // FeedDetailView 는 NavigationStack push 된 detail 화면 →
+            // HomeTabView 의 customTabBar 가 항상 ZStack 자식으로 떠 있어
+            // 댓글 입력 바를 가린다. 진입 시 탭바를 숨기고 이탈 시 복원.
+            uiState.hideBottomUI = true
+
             feed = await feedService.loadFeed(id: feedId)
             let images = await feedService.loadFeedImages(feedId: feedId)
             beforeImages = images.filter { $0.imageType == "BEFORE" }
@@ -251,11 +256,6 @@ struct FeedDetailView: View {
             if let blockedId = notification.userInfo?["blockedId"] as? String,
                blockedId == feed?.userId {
                 presentationMode.wrappedValue.dismiss()
-            }
-        }
-        .onChange(of: isCommentFocused) { _, focused in
-            withAnimation(.easeInOut(duration: 0.3)) {
-                uiState.hideBottomUI = focused
             }
         }
         .onDisappear {

@@ -44,15 +44,13 @@ struct SplashView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 44, style: .continuous))
                     .shadow(color: Color.theme.primary.opacity(0.18), radius: 28, x: 0, y: 12)
 
-                // 앱 이름 + Beta 배지 + 랜덤 슬로건
+                // 앱 이름 + 랜덤 슬로건
+                // (BETA 배지는 App Store 심사 Guideline 2.2 위반 사유로 제거)
                 VStack(spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("WashHub")
-                            .font(.system(size: 38, weight: .heavy))
-                            .foregroundColor(.theme.textPrimary)
-                            .tracking(-0.5)
-                        BetaBadge(variant: .large)
-                    }
+                    Text("WashHub")
+                        .font(.system(size: 38, weight: .heavy))
+                        .foregroundColor(.theme.textPrimary)
+                        .tracking(-0.5)
 
                     Text(slogan)
                         .font(.appCaption)

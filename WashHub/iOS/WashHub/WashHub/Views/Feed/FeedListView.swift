@@ -44,12 +44,10 @@ struct FeedListView: View {
                 VStack(spacing: 0) {
                     // 커스텀 헤더 (navigationBar 대체) — 스크롤 다운 시 자동 숨김
                     HStack(alignment: .center) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text("WashHub")
-                                .font(.headline(24))
-                                .foregroundColor(.theme.secondary)
-                            BetaBadge()
-                        }
+                        // App Store 심사 Guideline 2.2 위반 사유로 BetaBadge 제거
+                        Text("WashHub")
+                            .font(.headline(24))
+                            .foregroundColor(.theme.secondary)
 
                         Spacer()
 
