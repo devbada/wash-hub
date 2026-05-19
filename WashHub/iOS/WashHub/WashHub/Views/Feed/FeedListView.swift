@@ -6,6 +6,7 @@ import SwiftUI
 enum FeedNavTarget: Hashable {
     case myPage
     case feedDetail(String)   // feed id
+    case forYou               // For You 추천 피드
 }
 
 struct FeedListView: View {
@@ -57,6 +58,18 @@ struct FeedListView: View {
                                 .foregroundColor(.theme.textSecondary)
                         }
                         .padding(.trailing, 4)
+
+                        // For You 추천 피드 진입점 — 로그인 유저만 노출 (게스트는 추천 의미가 약함)
+                        // value-based push — 그래야 ForYouFeedView 내부의 NavigationLink(value:) 가
+                        // 같은 navigationDestination 핸들러를 타고 FeedDetailView 로 push 됨
+                        if !authManager.isGuest {
+                            NavigationLink(value: FeedNavTarget.forYou) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.theme.secondary)
+                            }
+                            .padding(.trailing, 4)
+                        }
 
                         Button(action: { loadId = UUID() }) {
                             Image(systemName: "arrow.clockwise")
@@ -251,6 +264,8 @@ struct FeedListView: View {
                     MyPageView()
                 case .feedDetail(let feedId):
                     FeedDetailView(feedId: feedId)
+                case .forYou:
+                    ForYouFeedView()
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
