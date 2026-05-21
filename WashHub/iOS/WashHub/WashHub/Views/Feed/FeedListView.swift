@@ -7,10 +7,14 @@ import SwiftUI
 /// v2 — 피드 목록(`feedList`)도 홈 스택의 푸시 화면으로 동작한다.
 /// 이렇게 하면 iOS 기본 뒤로가기 스와이프가 그대로 동작한다(차량 상세와 동일).
 enum FeedNavTarget: Hashable {
-    case feedList             // 피드 목록 화면
+    case feedList               // 피드 목록 화면
     case myPage
-    case feedDetail(String)   // feed id
-    case forYou               // For You 추천 피드
+    case feedDetail(String)     // feed id
+    case forYou                 // For You 추천 피드
+    case routines               // 추천 루틴 (바로가기)
+    case routineDetail(String)  // routine id
+    case forecast               // 세차 예측 (바로가기)
+    case badges                 // 내 뱃지 (바로가기)
 }
 
 struct FeedListView: View {

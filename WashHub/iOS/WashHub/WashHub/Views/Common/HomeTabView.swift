@@ -17,11 +17,8 @@ struct HomeTabView: View {
 
     // v2 — 햄버거 드로어 / 드로어에서 진입하는 화면들
     @State private var showDrawer = false
-    @State private var showRoutines = false
     @State private var showMyPage = false
     @State private var showNotifications = false
-    @State private var showForecast = false
-    @State private var showBadges = false
     /// v2 — 드로어 검색 / 전용 설정 화면 / 로그아웃 확인
     @State private var showSearch = false
     @State private var showSettings = false
@@ -54,17 +51,12 @@ struct HomeTabView: View {
                 if feedJustCreated {
                     feedJustCreated = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        openFeedList()
+                        pushToHome(.feedList)
                     }
                 }
             }) {
                 CreateFeedView(onFeedCreated: { _ in feedJustCreated = true })
                     .environmentObject(authManager)
-            }
-            .fullScreenCover(isPresented: $showRoutines) {
-                RoutineListView()
-                    .environmentObject(authManager)
-                    .environmentObject(navCoordinator)
             }
             .fullScreenCover(isPresented: $showMyPage) {
                 NavigationStack {
@@ -87,24 +79,6 @@ struct HomeTabView: View {
                             }
                         }
                 }
-            }
-            .fullScreenCover(isPresented: $showBadges) {
-                NavigationStack {
-                    BadgeCollectionView()
-                        .environmentObject(authManager)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(action: { showBadges = false }) {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundColor(.theme.textPrimary)
-                                }
-                            }
-                        }
-                }
-            }
-            .fullScreenCover(isPresented: $showForecast) {
-                WashForecastView()
             }
             .fullScreenCover(isPresented: $showSearch) {
                 NavigationStack {
@@ -174,7 +148,8 @@ struct HomeTabView: View {
         showDrawer = false
         switch dest {
         case .washIndex:
-            showForecast = true
+            // 세차 예측 — 홈 스택 푸시 (스와이프 뒤로가기 지원)
+            pushToHome(.forecast)
         case .map:
             selectedTab = 1
         case .equipment:
@@ -182,11 +157,13 @@ struct HomeTabView: View {
         case .myCarRecord, .myCarManage, .nextWash:
             selectedTab = 4
         case .badges:
-            showBadges = true
+            // 내 뱃지 — 홈 스택 푸시
+            pushToHome(.badges)
         case .feed, .liked, .following:
-            openFeedList()
+            pushToHome(.feedList)
         case .routines:
-            showRoutines = true
+            // 추천 루틴 — 홈 스택 푸시
+            pushToHome(.routines)
         case .settings:
             // 설정 — 전용 설정 화면
             showSettings = true
@@ -206,14 +183,14 @@ struct HomeTabView: View {
         }
     }
 
-    /// 피드 목록을 홈 NavigationStack 에 push — 드로어/작성 완료 등 외부 진입점 공용.
-    /// 홈 탭으로 전환한 뒤 기존 경로를 비우고 피드 목록을 푸시한다.
-    private func openFeedList() {
+    /// 지정한 화면을 홈 NavigationStack 에 push — 드로어/바로가기 등 외부 진입점 공용.
+    /// 홈 탭으로 전환한 뒤 기존 경로를 비우고 대상 화면을 푸시한다.
+    private func pushToHome(_ target: FeedNavTarget) {
         selectedTab = 0
         if navCoordinator.feedPath.count > 0 {
             navCoordinator.feedPath.removeLast(navCoordinator.feedPath.count)
         }
-        navCoordinator.feedPath.append(FeedNavTarget.feedList)
+        navCoordinator.feedPath.append(target)
     }
 
     /// 하단 UI 숨김 여부 — 강제(댓글/루틴) 또는 스크롤 기반 자동 숨김 둘 중 하나라도 true 면 숨김
@@ -233,8 +210,8 @@ struct HomeTabView: View {
                     onNotifications: { showNotifications = true },
                     onMyPage: { showMyPage = true },
                     onSelectTab: { selectedTab = $0 },
-                    onRoutines: { showRoutines = true },
-                    onOpenFeed: { openFeedList() }
+                    onRoutines: { pushToHome(.routines) },
+                    onOpenFeed: { pushToHome(.feedList) }
                 )
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: FeedNavTarget.self) { target in
@@ -255,6 +232,19 @@ struct HomeTabView: View {
                         ForYouFeedView()
                             .environmentObject(authManager)
                             .environmentObject(navCoordinator)
+                    case .routines:
+                        RoutineListView(embedInNavigation: false)
+                            .environmentObject(authManager)
+                            .environmentObject(navCoordinator)
+                    case .routineDetail(let routineId):
+                        RoutineDetailView(routineId: routineId)
+                            .environmentObject(authManager)
+                            .environmentObject(navCoordinator)
+                    case .forecast:
+                        WashForecastView(embedInNavigation: false)
+                    case .badges:
+                        BadgeCollectionView()
+                            .environmentObject(authManager)
                     }
                 }
             }
@@ -263,7 +253,7 @@ struct HomeTabView: View {
         case 3:
             EquipmentListView()
         case 4:
-            MyCarListView()
+            MyCarListView(onMenu: { showDrawer = true })
         default:
             Color.theme.surface.ignoresSafeArea()
         }

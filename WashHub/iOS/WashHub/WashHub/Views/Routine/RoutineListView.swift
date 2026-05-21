@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct RoutineListView: View {
+    /// 자체 NavigationStack 으로 감쌀지 여부.
+    /// true(기본): 풀스크린 커버로 단독 표시 — EquipmentListView 등에서 사용.
+    /// false: 외부 NavigationStack 에 push 됨 — 홈 바로가기 진입(스와이프 뒤로가기 지원).
+    var embedInNavigation: Bool = true
+
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var navCoordinator: NavigationCoordinator
     @Environment(\.dismiss) private var dismiss
@@ -20,7 +25,31 @@ struct RoutineListView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navCoordinator.routinePath) {
+        Group {
+            if embedInNavigation {
+                NavigationStack(path: $navCoordinator.routinePath) {
+                    content
+                        .navigationDestination(for: FeedNavTarget.self) { target in
+                            if case .routineDetail(let id) = target {
+                                RoutineDetailView(routineId: id)
+                            }
+                        }
+                }
+            } else {
+                content
+            }
+        }
+        .task {
+            await routineService.loadRoutines()
+        }
+        // 루틴 완료 알림 수신 시 카운트(따라했어요) 즉시 갱신
+        .onReceive(NotificationCenter.default.publisher(for: .routineCompleted)) { _ in
+            Task { await routineService.loadRoutines() }
+        }
+    }
+
+    /// 화면 본문 — 네비게이션 컨테이너와 무관한 공통 콘텐츠
+    private var content: some View {
             ZStack {
                 // 배경 탭 → 검색창 키보드 닫기
                 // (Color 가 ZStack 의 가장 아래 레이어라 검색바/카드 등 인터랙티브 요소와 충돌 X)
@@ -70,7 +99,7 @@ struct RoutineListView: View {
                                     Color.clear.frame(height: 0).id("top")
 
                                     ForEach(filteredRoutines) { routine in
-                                        NavigationLink(destination: RoutineDetailView(routineId: routine.id)) {
+                                        NavigationLink(value: FeedNavTarget.routineDetail(routine.id)) {
                                             RoutineCard(routine: routine)
                                         }
                                         .buttonStyle(.plain)
@@ -108,11 +137,14 @@ struct RoutineListView: View {
             .navigationTitle("루틴")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.theme.textPrimary)
+                // 커버 모드일 때만 커스텀 백 버튼. push 모드는 시스템 back 버튼 사용.
+                if embedInNavigation {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.theme.textPrimary)
+                        }
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -136,14 +168,6 @@ struct RoutineListView: View {
             } message: {
                 Text("루틴 등록은 로그인 후 이용할 수 있습니다.")
             }
-        }
-        .task {
-            await routineService.loadRoutines()
-        }
-        // 루틴 완료 알림 수신 시 카운트(따라했어요) 즉시 갱신
-        .onReceive(NotificationCenter.default.publisher(for: .routineCompleted)) { _ in
-            Task { await routineService.loadRoutines() }
-        }
     }
 
     /// 검색창 키보드 닫기 — 배경 탭 / 코드 트리거에서 사용

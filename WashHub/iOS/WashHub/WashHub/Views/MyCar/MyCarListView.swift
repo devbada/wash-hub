@@ -11,13 +11,19 @@ enum MyCarNavTarget: Hashable {
 }
 
 struct MyCarListView: View {
+    /// 좌상단 햄버거 → 드로어 열기
+    var onMenu: () -> Void = {}
+
     @EnvironmentObject var navCoordinator: NavigationCoordinator
+    @StateObject private var rhythmService = WashRhythmService()
     @State private var myCars: [MyCar] = []
     /// v2 — 세차 통계 카드 / 최근 세차 카드용 세차 기록
     @State private var washLogs: [WashLog] = []
     @State private var isLoading = true
     @State private var showAddCar = false
     @State private var showStats = false
+    /// 녹색 "다음 세차" 카드 → 세차 리듬 상세 시트
+    @State private var showRhythmDetail = false
     /// 현재 스크롤 위치 — 같은 탭 재탭 시 조건부 scrollTo 판단용 (CONVENTIONS.md 6.1)
     @State private var currentScrollY: CGFloat = 0
     private let scrollToTopThreshold: CGFloat = 200
@@ -28,16 +34,23 @@ struct MyCarListView: View {
                 Color.theme.surface
                     .ignoresSafeArea()
 
-                if isLoading {
-                    ProgressView().tint(.theme.secondary)
-                } else if myCars.isEmpty {
-                    emptyView
-                } else {
-                    carList
+                VStack(spacing: 0) {
+                    header
+
+                    if isLoading {
+                        Spacer()
+                        ProgressView().tint(.theme.secondary)
+                        Spacer()
+                    } else if myCars.isEmpty {
+                        Spacer()
+                        emptyView
+                        Spacer()
+                    } else {
+                        carList
+                    }
                 }
             }
-            .navigationTitle("내차")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             // value-based 진입 — myCarPath 로 push/pop
             .navigationDestination(for: MyCarNavTarget.self) { target in
                 switch target {
@@ -59,20 +72,35 @@ struct MyCarListView: View {
                     FeedDetailView(feedId: feedId)
                 }
             }
-            .toolbar {
-                // 우측: 차량 추가 (세차 통계는 v2 통계 카드로 노출)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showAddCar = true }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(.theme.secondary)
-                    }
-                }
-            }
             .sheet(isPresented: $showAddCar) {
                 AddMyCarView { await reloadAll() }
             }
         }
         .task { await reloadAll() }
+    }
+
+    // MARK: - 커스텀 헤더 (☰ + 내차 + 추가)
+    private var header: some View {
+        HStack(spacing: 10) {
+            Button(action: { onMenu() }) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.theme.textPrimary)
+            }
+            Text("내차")
+                .font(.appHeadline1)
+                .foregroundColor(.theme.textPrimary)
+            Spacer()
+            Button(action: { showAddCar = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.theme.textPrimary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(Color.theme.surface)
     }
 
     @State private var editingCar: MyCar?
@@ -105,11 +133,11 @@ struct MyCarListView: View {
                     }
                 }
 
-                // v2 — 세차 통계 요약 카드 (기존엔 상단 아이콘에만 숨어 있던 기능)
-                statsCard
+                // v2 — 내 세차 리듬 (다크 카드, 통계 요약) → 전체 통계 화면
+                rhythmStatsCard
 
-                // v2 — 내 세차 리듬 / 다음 세차 (기존엔 마이페이지에만 있던 카드)
-                WashRhythmCard()
+                // v2 — 다음 세차 추천 (녹색 카드) → 세차 리듬 상세
+                nextWashCard
 
                 // v2 — 최근 세차 카드
                 recentWashSection
@@ -122,6 +150,11 @@ struct MyCarListView: View {
         }
         .sheet(item: $editingCar) { car in
             AddMyCarView(editCar: car) { await reloadAll() }
+        }
+        .sheet(isPresented: $showRhythmDetail) {
+            if let car = primaryCar {
+                WashRhythmDetailView(initialCarId: car.id, allCars: myCars)
+            }
         }
         .alert("차량 삭제", isPresented: $showDeleteConfirm) {
             Button("취소", role: .cancel) { deletingCar = nil }
@@ -227,8 +260,8 @@ struct MyCarListView: View {
         washLogs.filter { $0.washDate.hasPrefix(currentYearText) }.count
     }
 
-    /// 세차 통계 요약 카드 — 탭하면 전체 통계 화면으로 진입
-    private var statsCard: some View {
+    /// 내 세차 리듬 — 다크 카드(통계 요약). 탭하면 전체 통계 화면으로 진입.
+    private var rhythmStatsCard: some View {
         NavigationLink(value: MyCarNavTarget.stats) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
@@ -237,7 +270,7 @@ struct MyCarListView: View {
                             .font(.appLabelSmall)
                             .fontWeight(.heavy)
                             .foregroundColor(.theme.tertiary)
-                        Text("내 세차 통계")
+                        Text("내 세차 리듬")
                             .font(.appHeadline3)
                             .foregroundColor(.theme.onPrimary)
                     }
@@ -247,9 +280,9 @@ struct MyCarListView: View {
                         .foregroundColor(.theme.onPrimary)
                 }
                 HStack(spacing: 10) {
-                    statCell(value: "\(totalWashCount)", unit: "회", label: "총 세차")
-                    statCell(value: "\(thisMonthWashCount)", unit: "회", label: "이번 달")
-                    statCell(value: "\(thisYearWashCount)", unit: "회", label: "올해")
+                    statCell(value: "\(totalWashCount)", label: "총 세차회")
+                    statCell(value: averageIntervalText, label: "평균 주기")
+                    statCell(value: monthlyAverageText, label: "월 평균회")
                 }
             }
             .padding(20)
@@ -262,9 +295,10 @@ struct MyCarListView: View {
         .buttonStyle(.plain)
     }
 
-    private func statCell(value: String, unit: String, label: String) -> some View {
+    private func statCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
-            (Text(value).font(.headline(22)) + Text(unit).font(.appSmall))
+            Text(value)
+                .font(.headline(24))
                 .foregroundColor(.theme.onPrimary)
             Text(label)
                 .font(.appSmall)
@@ -278,14 +312,126 @@ struct MyCarListView: View {
         )
     }
 
+    /// 평균 세차 주기 — 리듬 데이터 기반, 없으면 "-"
+    private var averageIntervalText: String {
+        guard let avg = rhythmService.summary?.averageIntervalDays else { return "-" }
+        return "\(avg)일"
+    }
+
+    /// 월 평균 세차 횟수 — 첫 세차 이후 경과 개월 기준 (소수 1자리)
+    private var monthlyAverageText: String {
+        let dates = washLogs.compactMap { parseWashDate($0.washDate) }
+        guard !dates.isEmpty, let oldest = dates.min() else { return "-" }
+        let months = Calendar.current.dateComponents([.month], from: oldest, to: Date()).month ?? 0
+        let effectiveMonths = max(months, 1)
+        let avg = Double(washLogs.count) / Double(effectiveMonths)
+        return String(format: "%.1f", avg)
+    }
+
+    /// "yyyy-MM-dd" 문자열을 Date 로 파싱
+    private func parseWashDate(_ raw: String) -> Date? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Seoul")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: String(raw.prefix(10)))
+    }
+
+    /// 다음 세차 추천 — 녹색 카드. 탭하면 세차 리듬 상세(시트) 진입.
+    private var nextWashCard: some View {
+        Button(action: { showRhythmDetail = true }) {
+            HStack(spacing: 14) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 20))
+                    .foregroundColor(.theme.secondary)
+                    .frame(width: 46, height: 46)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.theme.surfaceLowest)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    if let summary = rhythmService.summary, let nextDate = summary.nextWashDate {
+                        Text(dDayText(summary.daysUntilNextWash))
+                            .font(.appLabelSmall)
+                            .fontWeight(.heavy)
+                            .kerning(1.2)
+                            .foregroundColor(.theme.secondary)
+                        Text("다음 세차는 \(nextWashDateText(nextDate))")
+                            .font(.appBodyBold)
+                            .foregroundColor(.theme.textPrimary)
+                        Text(nextWashSubtitle)
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textSecondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("다음 세차")
+                            .font(.appBodyBold)
+                            .foregroundColor(.theme.textPrimary)
+                        Text("첫 세차를 기록하면 추천일이 표시돼요")
+                            .font(.appSmall)
+                            .foregroundColor(.theme.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.theme.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.theme.secondary.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dDayText(_ daysUntil: Int?) -> String {
+        guard let d = daysUntil else { return "D-DAY" }
+        if d < 0 { return "D+\(-d)" }
+        if d == 0 { return "D-DAY" }
+        return "D-\(d)"
+    }
+
+    private func nextWashDateText(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.timeZone = TimeZone(identifier: "Asia/Seoul")
+        f.dateFormat = "M월 d일 (E)"
+        return f.string(from: date)
+    }
+
+    /// 녹색 카드 보조 문구 — 날씨 메시지 있으면 사용, 없으면 기본 문구
+    private var nextWashSubtitle: String {
+        if let w = rhythmService.nextWashWeather, w.source != .unavailable {
+            return w.message
+        }
+        return "지난 기록을 보니 이쯤이 좋아요"
+    }
+
     /// 최근 세차 카드
     @ViewBuilder
     private var recentWashSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("최근 세차")
-                .font(.appHeadline3)
-                .foregroundColor(.theme.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Text("최근 세차")
+                    .font(.appHeadline3)
+                    .foregroundColor(.theme.textPrimary)
+                Spacer()
+                if let carId = primaryCar?.id, washLogs.first != nil {
+                    NavigationLink(value: MyCarNavTarget.washLogs(carId)) {
+                        Text("전체보기")
+                            .font(.appSmallBold)
+                            .foregroundColor(.theme.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
             if let log = washLogs.first, let carId = primaryCar?.id {
                 NavigationLink(value: MyCarNavTarget.washLogs(carId)) {
@@ -344,6 +490,13 @@ struct MyCarListView: View {
     private func reloadAll() async {
         await loadCars()
         await loadWashLogs()
+        await loadRhythm()
+    }
+
+    /// 대표 차량의 세차 리듬 로드 — 다크 카드의 평균 주기 / 녹색 다음 세차 카드용
+    private func loadRhythm() async {
+        guard let car = primaryCar else { return }
+        await rhythmService.loadRhythm(for: car)
     }
 
     private func loadWashLogs() async {
@@ -389,54 +542,75 @@ struct MyCarCard: View {
     let car: MyCar
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             AsyncImage(url: URL(string: car.imageUrl ?? "")) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().scaledToFill()
                 default:
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.theme.surface)
-                        .overlay(
-                            Image(systemName: "car.fill")
-                                .foregroundColor(.theme.textDisabled)
+                    LinearGradient(
+                        colors: [
+                            Color(red: 71/255, green: 85/255, blue: 105/255),
+                            Color(red: 30/255, green: 41/255, blue: 59/255)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                    .overlay(
+                        Image(systemName: "car.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white.opacity(0.5))
+                    )
+                }
+            }
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                // 대표 배지 — 차명 위에 별도 행으로 노출
+                if car.isPrimary {
+                    Text("대표")
+                        .font(.appLabelSmall)
+                        .fontWeight(.heavy)
+                        .kerning(1.0)
+                        .foregroundColor(.theme.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.theme.secondary.opacity(0.12))
                         )
                 }
+                Text(car.carModel)
+                    .font(.appHeadline2)
+                    .foregroundColor(.theme.textPrimary)
+                Text(carSubtitle)
+                    .font(.appCaption)
+                    .foregroundColor(.theme.textSecondary)
             }
-            .frame(width: 80, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(car.carModel)
-                        .font(.appBodyMedium)
-                        .foregroundColor(.theme.textPrimary)
-                    if car.isPrimary {
-                        Text("대표")
-                            .font(.appSmall)
-                            .foregroundColor(.theme.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.theme.secondary.opacity(0.15))
-                            .cornerRadius(4)
-                    }
-                }
-                HStack(spacing: 8) {
-                    if let color = car.carColor {
-                        Text(color).font(.appSmall).foregroundColor(.theme.textSecondary)
-                    }
-                    if let year = car.carYear {
-                        // String(year) — Int interpolation 시 천 단위 콤마 자동 추가 회피
-                        Text("\(String(year))년").font(.appSmall).foregroundColor(.theme.textSecondary)
-                    }
-                }
-            }
             Spacer()
             Image(systemName: "chevron.right")
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.theme.textDisabled)
         }
-        .padding(12)
-        .cardStyle()
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.theme.surfaceLowest)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color.theme.outlineVariant, lineWidth: 1)
+        )
+    }
+
+    /// "아마존 그레이 · 2021년" 형태 부제
+    private var carSubtitle: String {
+        var parts: [String] = []
+        if let color = car.carColor, !color.isEmpty { parts.append(color) }
+        // String(year) — Int interpolation 시 천 단위 콤마 자동 추가 회피
+        if let year = car.carYear { parts.append("\(String(year))년") }
+        return parts.joined(separator: " · ")
     }
 }
 

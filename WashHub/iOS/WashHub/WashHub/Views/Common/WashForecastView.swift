@@ -2,48 +2,67 @@ import SwiftUI
 
 /// 7일 세차예측 풀스크린 시트
 struct WashForecastView: View {
+    /// 자체 NavigationView 로 감쌀지 여부.
+    /// true(기본): 풀스크린 커버로 단독 표시 — WashIndexCard 등에서 사용.
+    /// false: 외부 NavigationStack 에 push 됨 — 홈 바로가기 진입(스와이프 뒤로가기 지원).
+    var embedInNavigation: Bool = true
+
     @StateObject private var washIndexService = WashIndexService()
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.theme.surface.ignoresSafeArea()
+        Group {
+            if embedInNavigation {
+                NavigationView { content }
+            } else {
+                content
+            }
+        }
+        .task {
+            await washIndexService.loadForecast()
+        }
+    }
 
-                if washIndexService.isForecastLoading {
-                    loadingView
-                } else if washIndexService.forecast.isEmpty {
-                    emptyView
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            // 헤더 요약
-                            headerSection
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                                .padding(.bottom, 16)
+    /// 화면 본문 — 네비게이션 컨테이너와 무관한 공통 콘텐츠
+    private var content: some View {
+        ZStack {
+            Color.theme.surface.ignoresSafeArea()
 
-                            // 미니 스코어 바 (7일 한눈에)
-                            miniScoreBar
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 20)
-
-                            // 일별 상세 카드
-                            LazyVStack(spacing: 12) {
-                                ForEach(washIndexService.forecast) { day in
-                                    forecastDayCard(day)
-                                }
-                            }
+            if washIndexService.isForecastLoading {
+                loadingView
+            } else if washIndexService.forecast.isEmpty {
+                emptyView
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        // 헤더 요약
+                        headerSection
                             .padding(.horizontal, 20)
-                            .padding(.bottom, 32)
+                            .padding(.top, 8)
+                            .padding(.bottom, 16)
+
+                        // 미니 스코어 바 (7일 한눈에)
+                        miniScoreBar
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+
+                        // 일별 상세 카드
+                        LazyVStack(spacing: 12) {
+                            ForEach(washIndexService.forecast) { day in
+                                forecastDayCard(day)
+                            }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 32)
                     }
                 }
             }
-            .navigationTitle("세차 예측")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // v2 — 좌상단 백 버튼 (시스템 back 스타일)
+        }
+        .navigationTitle("세차 예측")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 커버 모드일 때만 커스텀 백 버튼. push 모드는 시스템 back 버튼 사용.
+            if embedInNavigation {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "chevron.left")
@@ -52,9 +71,6 @@ struct WashForecastView: View {
                     }
                 }
             }
-        }
-        .task {
-            await washIndexService.loadForecast()
         }
     }
 
