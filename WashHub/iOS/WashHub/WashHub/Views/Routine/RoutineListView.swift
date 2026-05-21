@@ -3,6 +3,7 @@ import SwiftUI
 struct RoutineListView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var navCoordinator: NavigationCoordinator
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var routineService = RoutineService()
     @State private var showCreateRoutine = false
     @State private var showLoginAlert = false
@@ -32,7 +33,7 @@ struct RoutineListView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.theme.textSecondary)
-                        TextField("루틴 검색...", text: $searchText)
+                        TextField("원하는 코스 찾기", text: $searchText)
                             .font(.appBody)
                             .foregroundColor(.theme.textPrimary)
                     }
@@ -53,10 +54,10 @@ struct RoutineListView: View {
                             Image(systemName: "list.bullet.clipboard")
                                 .font(.system(size: 50))
                                 .foregroundColor(.theme.textDisabled)
-                            Text("등록된 루틴이 없습니다")
+                            Text("아직 등록된 코스가 없어요")
                                 .font(.appCaption)
                                 .foregroundColor(.theme.textDisabled)
-                            Text("나만의 세차 루틴을 공유해보세요!")
+                            Text("나만의 세차 코스를 공유해볼까요?")
                                 .font(.appSmall)
                                 .foregroundColor(.theme.textDisabled)
                         }
@@ -107,6 +108,13 @@ struct RoutineListView: View {
             .navigationTitle("루틴")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.theme.textPrimary)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         if authManager.isGuest { showLoginAlert = true }

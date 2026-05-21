@@ -40,6 +40,7 @@ func encodeFacilities(_ facilities: [String], body: String) -> String {
 
 struct CarWashListView: View {
     @EnvironmentObject var authManager: AuthManager
+    @Environment(\.dismiss) private var dismiss
     @State private var carWashes: [CarWash] = []
     @State private var isLoading = true
     @State private var searchText = ""
@@ -166,6 +167,13 @@ struct CarWashListView: View {
             }
             .navigationTitle("세차장")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.theme.textPrimary)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { showMapView.toggle() }) {
                         Image(systemName: showMapView ? "list.bullet" : "map")

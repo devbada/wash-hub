@@ -77,27 +77,95 @@ struct CreateFeedView: View {
                 Color.theme.surface
                     .ignoresSafeArea()
 
+                VStack(spacing: 0) {
+                    composerHeader
+
                 ScrollView {
                     VStack(spacing: 20) {
+                        // [v2] Before / After 사진 — 작성 화면 최상단 (각각 1장)
+                        HStack(alignment: .top, spacing: 12) {
+                            compactImageSection(
+                                title: "Before",
+                                images: $beforeImages,
+                                maxCount: 1,
+                                onAdd: { presentPicker(.before) }
+                            )
+
+                            compactImageSection(
+                                title: "After",
+                                images: $afterImages,
+                                maxCount: 1,
+                                onAdd: { presentPicker(.after) }
+                            )
+                        }
+
+                        // 목록 썸네일 안내 — BEFORE/AFTER 카드의 "썸네일" 라디오 설명
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundColor(.theme.secondary)
+                            Text("목록 카드에 보일 사진을 BEFORE / AFTER 중에서 골라요")
+                                .font(.appSmall)
+                                .foregroundColor(.theme.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+
+                        // 사진 앨범 안내 — 외부에서 사진 찍어둔 경우 (루틴 따라하기 후 등)
+                        if showPhotoFromAlbumHint {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.theme.secondary)
+                                    .padding(.top, 1)
+                                Text("방금 촬영한 사진은 사진 앨범에 있어요. + 버튼으로 선택해주세요.")
+                                    .font(.appSmall)
+                                    .foregroundColor(.theme.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        // 비율 안내
+                        HStack(spacing: 5) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 13))
+                                .foregroundColor(.theme.textSecondary)
+                            Text("같은 각도로 찍으면 비교가 훨씬 자연스러워요")
+                                .font(.appSmall)
+                                .foregroundColor(.theme.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+
                         // 내용
                         VStack(alignment: .leading, spacing: 8) {
                             Text("내용")
                                 .font(.appLabel)
                                 .foregroundColor(.theme.textSecondary)
-                            TextEditor(text: $content)
-                                .font(.appBody)
-                                .foregroundColor(.theme.textPrimary)
-                                .frame(minHeight: 100)
-                                .padding(12)
-                                .background(Color.theme.surface)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.theme.border, lineWidth: 1)
-                                )
-                                .onAppear {
-                                    UITextView.appearance().backgroundColor = .clear
+                            ZStack(alignment: .topLeading) {
+                                TextEditor(text: $content)
+                                    .font(.appBody)
+                                    .foregroundColor(.theme.textPrimary)
+                                    .frame(minHeight: 100)
+                                    .padding(12)
+                                    .background(Color.theme.surface)
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.theme.border, lineWidth: 1)
+                                    )
+                                    .onAppear {
+                                        UITextView.appearance().backgroundColor = .clear
+                                    }
+                                if content.isEmpty {
+                                    Text("오늘 세차 어땠어요? 자유롭게 적어주세요 ☺️")
+                                        .font(.appBody)
+                                        .foregroundColor(.theme.textDisabled)
+                                        .padding(.horizontal, 17)
+                                        .padding(.vertical, 20)
+                                        .allowsHitTesting(false)
                                 }
+                            }
                         }
 
                         // 추천 해시태그 — 본문/차량/세차방식에서 자동 추출, 탭하여 선택/해제 + 직접 추가
@@ -190,53 +258,6 @@ struct CreateFeedView: View {
                             }
                         }
 
-                        // Before / After 사진 — 각각 1장만 (썸네일 선택 일관성)
-                        HStack(alignment: .top, spacing: 12) {
-                            compactImageSection(
-                                title: "Before",
-                                images: $beforeImages,
-                                maxCount: 1,
-                                onAdd: { presentPicker(.before) }
-                            )
-
-                            compactImageSection(
-                                title: "After",
-                                images: $afterImages,
-                                maxCount: 1,
-                                onAdd: { presentPicker(.after) }
-                            )
-                        }
-
-                        // 사진 앨범 안내 — 외부에서 사진 찍어둔 경우 (루틴 따라하기 후 등)
-                        // Before/After 영역 바로 아래에 작게 표시 — 사용자가 + 버튼 보고 망설일 때 도움
-                        if showPhotoFromAlbumHint {
-                            HStack(alignment: .top, spacing: 6) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.theme.secondary)
-                                    .padding(.top, 1)
-                                Text("방금 촬영한 사진은 사진 앨범에 있어요. + 버튼으로 선택해주세요.")
-                                    .font(.appSmall)
-                                    .foregroundColor(.theme.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-
-                        // 비율 안내 — 같은 비율(가로/세로 일치)이면 슬라이더 비교가 더 깔끔
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 11))
-                                .foregroundColor(.theme.textDisabled)
-                                .padding(.top, 1)
-                            Text("같은 비율의 사진을 올리면 Before/After 비교가 더 자연스러워요")
-                                .font(.appSmall)
-                                .foregroundColor(.theme.textDisabled)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        // 리스트 썸네일 소스 선택 — Before/After 중 어떤 사진을 카드에 노출할지
-                        thumbnailSourcePicker
-
                         // 추가 사진 (선택)
                         wideImageSection(
                             title: "추가 사진 (선택)",
@@ -272,60 +293,21 @@ struct CreateFeedView: View {
                                 .foregroundColor(.theme.error)
                         }
 
-                        // 작성 완료 버튼 — Hero CTA
-                        Button(action: submitFeed) {
-                            if isLoading {
-                                ProgressView()
-                                    .tint(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 18)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(red: 132/255, green: 204/255, blue: 22/255),
-                                                Color(red: 101/255, green: 163/255, blue: 13/255)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .cornerRadius(16)
-                                    .shadow(color: Color(red: 101/255, green: 163/255, blue: 13/255).opacity(0.45), radius: 20, x: 0, y: 10)
-                            } else {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "sparkles")
-                                        .font(.system(size: 16, weight: .bold))
-                                    Text("작성 완료")
-                                    Image(systemName: "arrow.right")
-                                        .font(.system(size: 14, weight: .bold))
-                                }
-                                .ctaButtonStyle()
-                            }
-                        }
-                        .disabled(!canSubmit)
-                        .opacity(canSubmit ? 1.0 : 0.45)
-                        .scaleEffect(canSubmit ? 1.0 : 0.98)
-                        .animation(.easeInOut(duration: 0.2), value: canSubmit)
-                        .padding(.top, 4)
+                        // [v2] 게시 버튼은 상단 헤더(툴바)로 이동 — 하단 CTA 제거
+                        Color.clear.frame(height: 4)
                     }
                     .padding(16)
                 }
                 .onTapGesture {
                     hideKeyboard()
                 }
-            }
-            .navigationTitle("피드 작성")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("취소") { dismiss() }
-                        .foregroundColor(.theme.textSecondary)
                 }
             }
+            .navigationBarHidden(true)
             .alert("작성 완료", isPresented: $showSuccess) {
                 Button("확인") { dismiss() }
             } message: {
-                Text("피드가 성공적으로 등록되었습니다!")
+                Text("피드가 등록됐어요!")
             }
             .task {
                 await loadMyCars()
@@ -368,6 +350,62 @@ struct CreateFeedView: View {
         }
     }
 
+    // MARK: - v2 커스텀 헤더 (취소 / 피드 작성 / 게시)
+    private var composerHeader: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Text("취소")
+                    .font(.appBodyBold)
+                    .foregroundColor(.theme.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(Color.theme.surfaceLowest))
+                    .overlay(Capsule().stroke(Color.theme.outlineVariant, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text("피드 작성")
+                .font(.headline(18))
+                .foregroundColor(.theme.textPrimary)
+
+            Spacer()
+
+            Button(action: submitFeed) {
+                Group {
+                    if isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("게시")
+                            .font(.appBodyBold)
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(minWidth: 40)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule().fill(
+                        LinearGradient(
+                            colors: [Color.theme.tertiary, Color.theme.secondary],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                )
+                .shadow(color: Color.theme.secondary.opacity(0.35), radius: 10, x: 0, y: 5)
+                .opacity(canSubmit ? 1.0 : 0.4)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmit)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+        .background(Color.theme.surface)
+    }
+
     // MARK: - Before/After 컴팩트 이미지 섹션 (반반)
     private func compactImageSection(
         title: String,
@@ -375,59 +413,90 @@ struct CreateFeedView: View {
         maxCount: Int,
         onAdd: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                    .font(.appLabel)
-                    .foregroundColor(.theme.textSecondary)
-                Spacer()
-                Text("\(images.wrappedValue.count)/\(maxCount)")
-                    .font(.appSmall)
-                    .foregroundColor(.theme.textDisabled)
-            }
+        let isAfter = (title == "After")
+        let accent = isAfter ? Color.theme.secondary : Color.theme.outline
+        let tint = isAfter ? Color.theme.secondary.opacity(0.10) : Color.theme.surfaceLow
+        let labelColor = isAfter ? Color.theme.secondary : Color.theme.onSurfaceVariant
+        let isThumb = thumbnailSource == (isAfter ? .after : .before)
+        let cardHeight: CGFloat = 168
 
-            // 이미지 그리드
-            let cols = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
-            LazyVGrid(columns: cols, spacing: 4) {
-                ForEach(images.wrappedValue.indices, id: \.self) { index in
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: images.wrappedValue[index])
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                        Button(action: { images.wrappedValue.remove(at: index) }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
-                                .background(Circle().fill(Color.black.opacity(0.6)))
+        return ZStack(alignment: .topLeading) {
+            // 카드 본체 — 고정 높이 카드 (이미지 overflow 방지)
+            Group {
+                if let image = images.wrappedValue.first {
+                    // 선택된 사진
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: cardHeight)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(alignment: .topTrailing) {
+                            Button(action: { images.wrappedValue.removeAll() }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                                    .background(Circle().fill(Color.black.opacity(0.55)))
+                            }
+                            .padding(8)
                         }
-                        .offset(x: 2, y: -2)
-                    }
-                }
-
-                if images.wrappedValue.count < maxCount {
+                } else {
+                    // 빈 업로더 — v2 카드 (카메라 아이콘 + 라벨)
                     Button(action: onAdd) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.theme.surface)
-                            .frame(height: 60)
-                            .overlay(
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.theme.textDisabled)
-                            )
+                        VStack(spacing: 8) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 34))
+                            Text(title.uppercased())
+                                .font(.appCaptionBold)
+                                .kerning(2)
+                            Text("\(images.wrappedValue.count)/\(maxCount)")
+                                .font(.appSmall)
+                                .foregroundColor(.theme.textSecondary)
+                        }
+                        .foregroundColor(labelColor)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: cardHeight)
+                        .background(tint)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [6]))
+                        )
                     }
+                    .buttonStyle(.plain)
                 }
             }
+
+            // 목록 썸네일 라디오 — 좌상단. 탭하면 이 사진이 리스트 카드 썸네일로 지정됨
+            Button(action: { thumbnailSource = isAfter ? .after : .before }) {
+                HStack(spacing: 5) {
+                    ZStack {
+                        if isThumb {
+                            Circle()
+                                .fill(Color.theme.secondary)
+                                .frame(width: 17, height: 17)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                        } else {
+                            Circle()
+                                .strokeBorder(Color.theme.outline, lineWidth: 2)
+                                .frame(width: 17, height: 17)
+                        }
+                    }
+                    Text("썸네일")
+                        .font(.appSmallBold)
+                        .foregroundColor(isThumb ? Color.theme.secondary : Color.theme.textSecondary)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.theme.surfaceLowest))
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+            }
+            .buttonStyle(.plain)
+            .padding(10)
         }
-        .padding(12)
-        .background(Color.theme.surface.opacity(0.5))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.theme.border, lineWidth: 1)
-        )
     }
 
     // MARK: - 추가 사진 와이드 섹션
@@ -637,21 +706,7 @@ struct CreateFeedView: View {
         selectedHashtags.remove(tag)
     }
 
-    // MARK: - 썸네일 소스 선택 (Before / After 중 리스트 카드에 노출할 사진)
-    private var thumbnailSourcePicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("리스트 썸네일로 사용")
-                .font(.appLabel)
-                .foregroundColor(.theme.textSecondary)
-
-            Picker("리스트 썸네일", selection: $thumbnailSource) {
-                ForEach(ThumbnailSource.allCases) { source in
-                    Text(source.label).tag(source)
-                }
-            }
-            .pickerStyle(.segmented)
-        }
-    }
+    // MARK: - 썸네일 소스 — v2: BEFORE/AFTER 카드의 "썸네일" 라디오로 선택 (compactImageSection 내부)
 
     // MARK: - 내차 목록 로드
     private func loadMyCars() async {
@@ -735,7 +790,7 @@ struct CreateFeedView: View {
                 onFeedCreated?(createdFeedId)
                 showSuccess = true
             } catch {
-                errorMessage = "피드 작성에 실패했습니다: \(error.localizedDescription)"
+                errorMessage = "피드 작성에 실패했어요: \(error.localizedDescription)"
             }
             isLoading = false
         }

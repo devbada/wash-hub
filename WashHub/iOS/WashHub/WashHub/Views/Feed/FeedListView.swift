@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// 피드 탭 NavigationStack 의 value-based destination 타입.
+/// 홈 NavigationStack 의 value-based destination 타입.
 /// destination-based `NavigationLink(destination:)` 은 `NavigationStack(path:)` 와 자동 연동이
 /// 보장되지 않아 `path` mutation 으로 pop 이 안 되는 케이스가 있어, 모든 push 를 value-based 로 처리.
+///
+/// v2 — 피드 목록(`feedList`)도 홈 스택의 푸시 화면으로 동작한다.
+/// 이렇게 하면 iOS 기본 뒤로가기 스와이프가 그대로 동작한다(차량 상세와 동일).
 enum FeedNavTarget: Hashable {
+    case feedList             // 피드 목록 화면
     case myPage
     case feedDetail(String)   // feed id
     case forYou               // For You 추천 피드
@@ -12,6 +16,7 @@ enum FeedNavTarget: Hashable {
 struct FeedListView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var navCoordinator: NavigationCoordinator
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var feedService = FeedService()
     @ObservedObject private var blockService = BlockService.shared
     @State private var showLoginAlert = false
@@ -37,16 +42,22 @@ struct FeedListView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navCoordinator.feedPath) {
-            ZStack {
-                Color.theme.surface
-                    .ignoresSafeArea()
+        ZStack {
+            Color.theme.surface
+                .ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     // 커스텀 헤더 (navigationBar 대체) — 스크롤 다운 시 자동 숨김
                     HStack(alignment: .center) {
+                        // v2 — 모달(드로어) 진입 시 좌상단 백 버튼
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.theme.textPrimary)
+                        }
+
                         // App Store 심사 Guideline 2.2 위반 사유로 BetaBadge 제거
-                        Text("WashHub")
+                        Text("feed")
                             .font(.headline(24))
                             .foregroundColor(.theme.secondary)
 
@@ -257,19 +268,9 @@ struct FeedListView: View {
                     } // ScrollViewReader 닫기
                 }
             }
-            // value-based 진입 — feedPath 로 push/pop (탭 재탭 시 pop-to-root 가능)
-            .navigationDestination(for: FeedNavTarget.self) { target in
-                switch target {
-                case .myPage:
-                    MyPageView()
-                case .feedDetail(let feedId):
-                    FeedDetailView(feedId: feedId)
-                case .forYou:
-                    ForYouFeedView()
-                }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-        }
+        .toolbar(.hidden, for: .navigationBar)
+        // 내비게이션 바를 숨겨도 가장자리 스와이프 뒤로가기가 동작하도록 활성화
+        .enableSwipeBackGesture()
         .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
             Button("로그인하기") {
                 authManager.exitGuestMode()

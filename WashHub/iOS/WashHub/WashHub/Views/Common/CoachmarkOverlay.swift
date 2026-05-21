@@ -138,8 +138,8 @@ struct CoachmarkOverlay: View {
                 ForEach(controller.steps.indices, id: \.self) { idx in
                     Circle()
                         .fill(idx == controller.currentIndex
-                              ? Color(red: 132/255, green: 204/255, blue: 22/255)
-                              : Color.white.opacity(0.4))
+                              ? Color.theme.tertiary
+                              : Color.white.opacity(0.35))
                         .frame(width: 8, height: 8)
                 }
             }
@@ -164,7 +164,7 @@ private struct TooltipBubble: View {
             // 제목 + 본문
             VStack(alignment: .leading, spacing: 8) {
                 Text(step.title)
-                    .font(.appHeadline3)
+                    .font(.appHeadline2)
                     .foregroundColor(.theme.textPrimary)
                 Text(step.message)
                     .font(.appBody)
@@ -179,12 +179,12 @@ private struct TooltipBubble: View {
                 Button(action: onNext) {
                     Text(nextButtonTitle)
                         .font(.appBodyBold)
-                        .foregroundColor(.black)
+                        .foregroundColor(.theme.primary)
                         .padding(.horizontal, 22)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 11)
                         .background(
-                            Capsule()
-                                .fill(Color(red: 132/255, green: 204/255, blue: 22/255))
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.theme.tertiary)
                         )
                 }
             }
@@ -193,9 +193,14 @@ private struct TooltipBubble: View {
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.theme.surfaceLowest)
         )
-        .shadow(color: Color.black.opacity(0.18), radius: 14, x: 0, y: 6)
+        // v2 — 고스트 보더 + 옅은 그림자 (B안)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.theme.outlineVariant, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.18), radius: 18, x: 0, y: 8)
     }
 }

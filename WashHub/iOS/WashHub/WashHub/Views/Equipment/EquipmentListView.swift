@@ -19,7 +19,8 @@ struct EquipmentListView: View {
     @State private var selectedCategory = "전체"
     @State private var showAddEquipment = false
     @State private var showLoginAlert = false
-    @State private var showCarWashList = false
+    /// v2 — 루틴 가이드 시트
+    @State private var showRoutines = false
 
     private let categories = ["전체", "샴푸", "왁스", "코팅제", "타월", "폼건", "기타"]
 
@@ -44,7 +45,7 @@ struct EquipmentListView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.theme.textSecondary)
-                        TextField("케미컬 검색...", text: $searchText)
+                        TextField("샴푸, 왁스 등 찾아보기", text: $searchText)
                             .font(.appBody)
                             .foregroundColor(.theme.textPrimary)
                     }
@@ -64,13 +65,13 @@ struct EquipmentListView: View {
                                         .font(.appLabel)
                                         .foregroundColor(
                                             selectedCategory == category
-                                            ? .black : .theme.textSecondary
+                                            ? .theme.onPrimary : .theme.textPrimary
                                         )
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 8)
                                         .background(
                                             selectedCategory == category
-                                            ? Color.theme.secondary : Color.theme.surface
+                                            ? Color.theme.primary : Color.theme.surfaceLow
                                         )
                                         .cornerRadius(20)
                                 }
@@ -87,7 +88,7 @@ struct EquipmentListView: View {
                         Spacer()
                     } else if filteredEquipments.isEmpty {
                         Spacer()
-                        Text("장비가 없습니다")
+                        Text("세차용품이 없어요")
                             .font(.appCaption)
                             .foregroundColor(.theme.textDisabled)
                         Spacer()
@@ -97,6 +98,11 @@ struct EquipmentListView: View {
                                 LazyVStack(spacing: 12) {
                                     // 스크롤 최상단 앵커 — 탭 더블탭 시 이 지점으로 이동
                                     Color.clear.frame(height: 0).id("top")
+
+                                    // v2 — 루틴 가이드 카드 (전체 카테고리 + 미검색 시)
+                                    if selectedCategory == "전체" && searchText.isEmpty {
+                                        routineGuideCard
+                                    }
 
                                     ForEach(filteredEquipments) { equipment in
                                         // value-based — navCoordinator.equipmentPath 로 pop 가능
@@ -130,7 +136,7 @@ struct EquipmentListView: View {
                     }
                 }
             }
-            .navigationTitle("케미컬")
+            .navigationTitle("세차용품")
             .navigationBarTitleDisplayMode(.inline)
             // value-based 진입 — equipmentPath 로 push/pop
             .navigationDestination(for: EquipmentNavTarget.self) { target in
@@ -144,18 +150,7 @@ struct EquipmentListView: View {
                 }
             }
             .toolbar {
-                // 좌측: 세차장 목록 sheet (자체 NavigationView 보유 → push 시 중첩 경고 회피)
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { showCarWashList = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "mappin.and.ellipse")
-                            Text("세차장")
-                                .font(.appLabel)
-                        }
-                        .foregroundColor(.theme.secondary)
-                    }
-                }
-                // 우측: 케미컬 추가
+                // 우측: 세차용품 추가 (세차장은 v2에서 별도 탭으로 분리)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         if authManager.isGuest { showLoginAlert = true }
@@ -169,9 +164,10 @@ struct EquipmentListView: View {
             .sheet(isPresented: $showAddEquipment) {
                 AddEquipmentView { await loadEquipments(forceRefresh: true) }
             }
-            .sheet(isPresented: $showCarWashList) {
-                CarWashListView()
+            .fullScreenCover(isPresented: $showRoutines) {
+                RoutineListView()
                     .environmentObject(authManager)
+                    .environmentObject(navCoordinator)
             }
             .alert("로그인이 필요해요", isPresented: $showLoginAlert) {
                 Button("로그인하기") { authManager.exitGuestMode() }
@@ -182,6 +178,42 @@ struct EquipmentListView: View {
         }
         .navigationViewStyle(.stack)
         .task { await loadEquipments() }
+    }
+
+    /// v2 — 루틴 가이드 진입 카드 ("처음이면 여기부터")
+    private var routineGuideCard: some View {
+        Button(action: { showRoutines = true }) {
+            HStack(spacing: 14) {
+                Image(systemName: "list.bullet.clipboard.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white)
+                    .frame(width: 48, height: 48)
+                    .background(Color.white.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("NEW · 가이드")
+                        .font(.appLabelSmall)
+                        .fontWeight(.heavy)
+                        .foregroundColor(.theme.tertiary)
+                    Text("처음이면 여기부터")
+                        .font(.appHeadline3)
+                        .foregroundColor(.theme.onPrimary)
+                    Text("초보용 4가지 코스 · 친절한 가이드")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.onPrimary.opacity(0.7))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.theme.onPrimary)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.theme.primary)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     /// - Parameter forceRefresh: true면 캐시 무시 (사용자 추가/수정/삭제 후 호출)
@@ -364,7 +396,7 @@ struct EquipmentDetailView: View {
                                 .font(.appBody)
                                 .foregroundColor(.theme.textSecondary)
                         } else {
-                            Text("아직 설명이 등록되지 않았습니다.")
+                            Text("아직 설명이 없어요.")
                                 .font(.appCaption)
                                 .foregroundColor(.theme.textDisabled)
                         }
@@ -491,7 +523,7 @@ struct EquipmentDetailView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: reviewService.myExistingReview != nil ? "pencil" : "plus")
-                        Text(reviewService.myExistingReview != nil ? "내 리뷰 수정" : "리뷰 작성")
+                        Text(reviewService.myExistingReview != nil ? "내 리뷰 수정" : "리뷰 쓰기")
                     }
                     .font(.appLabel)
                     .foregroundColor(.theme.secondary)
@@ -511,10 +543,10 @@ struct EquipmentDetailView: View {
                     Image(systemName: "text.bubble")
                         .font(.system(size: 28))
                         .foregroundColor(.theme.textDisabled)
-                    Text("아직 리뷰가 없습니다")
+                    Text("아직 리뷰가 없어요")
                         .font(.appCaption)
                         .foregroundColor(.theme.textDisabled)
-                    Text("첫 번째 리뷰를 남겨보세요!")
+                    Text("첫 리뷰를 써볼까요?")
                         .font(.appSmall)
                         .foregroundColor(.theme.textDisabled)
                 }
@@ -576,7 +608,7 @@ struct EquipmentDetailView: View {
                 .buttonStyle(.plain)
             }
 
-            Text("외부 사이트로 이동합니다")
+            Text("외부 페이지로 이동해요")
                 .font(.appSmall)
                 .foregroundColor(.theme.textDisabled)
         }

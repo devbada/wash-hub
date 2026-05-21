@@ -27,6 +27,14 @@ struct CarWashMapView: View {
     @State private var hasSearched = false
     @State private var toastMessage: String?
     @State private var navigateToDetail: CarWash?
+    /// "예약하기" → 네이버 지도 이동 전 책임고지 안내 노출 여부
+    @State private var showNaverNoticeAlert = false
+    /// 책임고지 확인 후 네이버 지도로 검색할 대상 POI
+    @State private var pendingNaverPOI: CarWashPOI?
+    /// 안내 카드의 "다시 보지 않기" 체크 상태 (카드가 열릴 때마다 초기화)
+    @State private var dontShowNaverNoticeChecked = false
+    /// "다시 보지 않기" 저장 값 — true면 안내 없이 바로 네이버 지도로 이동
+    @AppStorage("hideNaverMapNotice") private var hideNaverMapNotice = false
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.5665, longitude: 126.9780),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -91,12 +99,12 @@ struct CarWashMapView: View {
                 if let selected = selectedPOI {
                     selectedPOICard(selected)
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 100)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if hasSearched {
                     resultSummary
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 100)
                 }
             }
 
@@ -136,6 +144,11 @@ struct CarWashMapView: View {
             if locationManager.isPermissionDenied {
                 permissionDeniedOverlay
             }
+
+            // "예약하기" → 네이버 지도 책임고지 안내
+            if showNaverNoticeAlert, let poi = pendingNaverPOI {
+                naverNoticeOverlay(poi)
+            }
         }
         .onAppear {
             locationManager.requestPermission()
@@ -163,6 +176,94 @@ struct CarWashMapView: View {
                 })
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: showNaverNoticeAlert)
+    }
+
+    // MARK: - 네이버 지도 책임고지 안내 오버레이
+    /// "다시 보지 않기" 체크 시 `hideNaverMapNotice`(AppStorage)에 저장되어
+    /// 이후로는 안내 없이 바로 네이버 지도로 이동한다.
+    private func naverNoticeOverlay(_ poi: CarWashPOI) -> some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture { dismissNaverNotice() }
+
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.theme.tertiary)
+                    Text("네이버 지도에서 검색")
+                        .font(.appHeadline3)
+                        .foregroundColor(.theme.textPrimary)
+                }
+
+                Text("'\(poi.name)' 정보를 네이버 지도에서 검색해요.\n\n네이버 지도는 WashHub와 무관한 외부 서비스예요. 표시되는 정보는 WashHub가 제공·보장하지 않으며, 해당 세차장이 이미 폐업했거나 정보가 없을 수 있고 예약이 불가능할 수도 있어요.")
+                    .font(.appCaption)
+                    .foregroundColor(.theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 다시 보지 않기 체크박스
+                Button(action: { dontShowNaverNoticeChecked.toggle() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: dontShowNaverNoticeChecked ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 19))
+                            .foregroundColor(dontShowNaverNoticeChecked ? .theme.secondary : .theme.textDisabled)
+                        Text("다시 보지 않기")
+                            .font(.appCaption)
+                            .foregroundColor(.theme.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 10) {
+                    Button(action: { dismissNaverNotice() }) {
+                        Text("취소")
+                            .font(.appBodyBold)
+                            .foregroundColor(.theme.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Color.theme.surfaceLow)
+                            .cornerRadius(14)
+                    }
+                    Button(action: { confirmNaverNotice(poi) }) {
+                        Text("검색하기")
+                            .font(.appBodyBold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(
+                                LinearGradient(
+                                    colors: [.theme.tertiary, .theme.secondary],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .cornerRadius(14)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.theme.surfaceLowest)
+            .cornerRadius(20)
+            .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+            .padding(.horizontal, 32)
+        }
+        .transition(.opacity)
+    }
+
+    /// 안내 취소 — 네이버 지도로 이동하지 않음
+    private func dismissNaverNotice() {
+        showNaverNoticeAlert = false
+        pendingNaverPOI = nil
+    }
+
+    /// 안내 확인 — 체크 시 저장 후 네이버 지도로 검색 이동
+    private func confirmNaverNotice(_ poi: CarWashPOI) {
+        if dontShowNaverNoticeChecked {
+            hideNaverMapNotice = true
+        }
+        showNaverNoticeAlert = false
+        pendingNaverPOI = nil
+        openNaverMapSearch(poi)
     }
 
     // MARK: - 검색 버튼
@@ -343,42 +444,47 @@ struct CarWashMapView: View {
                 }
             }
 
-            // 전화 + 길찾기
-            HStack(spacing: 8) {
+            // 예약 + 길찾기 + 전화
+            HStack(spacing: 10) {
+                Button(action: {
+                    // "다시 보지 않기"를 이미 선택했으면 안내 없이 바로 이동
+                    if hideNaverMapNotice {
+                        openNaverMapSearch(poi)
+                    } else {
+                        pendingNaverPOI = poi
+                        dontShowNaverNoticeChecked = false
+                        showNaverNoticeAlert = true
+                    }
+                }) {
+                    Text("더 자세히 찾아보기")
+                        .font(.appBodyBold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(
+                            LinearGradient(
+                                colors: [.theme.tertiary, .theme.secondary],
+                                startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .cornerRadius(14)
+                }
+                Button(action: { openInMaps(poi) }) {
+                    Image(systemName: "arrow.triangle.turn.up.right.diamond")
+                        .font(.system(size: 18))
+                        .foregroundColor(.theme.textPrimary)
+                        .frame(width: 46, height: 46)
+                        .background(Color.theme.surfaceLow)
+                        .cornerRadius(14)
+                }
                 if let phone = poi.phone, !phone.isEmpty {
                     Button(action: { callPhone(phone) }) {
-                        Label(phone, systemImage: "phone.fill")
-                            .font(.appSmall)
-                            .foregroundColor(.theme.secondary)
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: 17))
+                            .foregroundColor(.theme.textPrimary)
+                            .frame(width: 46, height: 46)
+                            .background(Color.theme.surfaceLow)
+                            .cornerRadius(14)
                     }
-                }
-                Spacer()
-                Button(action: { openInMaps(poi) }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.turn.up.right.diamond")
-                            .font(.system(size: 12))
-                        Text("길찾기")
-                            .font(.appLabel)
-                    }
-                    .foregroundColor(.theme.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.theme.secondary.opacity(0.15))
-                    .cornerRadius(16)
-                }
-
-                Button(action: { openInAppleMaps(poi) }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "map.fill")
-                            .font(.system(size: 12))
-                        Text("지도앱")
-                            .font(.appLabel)
-                    }
-                    .foregroundColor(.theme.tertiary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.theme.tertiary.opacity(0.15))
-                    .cornerRadius(16)
                 }
             }
         }
@@ -585,6 +691,43 @@ struct CarWashMapView: View {
     // MARK: - Apple Maps 앱에서 열기
     private func openInAppleMaps(_ poi: CarWashPOI) {
         poi.mapItem.openInMaps(launchOptions: nil)
+    }
+
+    // MARK: - 네이버 지도 검색 연동 ("더 자세히 찾아보기")
+    //
+    // 책임고지: 네이버 지도는 WashHub와 무관한 외부 서비스이므로, 이동 전
+    // `showNaverNoticeAlert` 안내를 거치며 정보 정확성/예약 가능 여부를 보장하지 않음을 고지한다.
+    /// "더 자세히 찾아보기" 버튼 — 세차장 이름으로 네이버 지도 앱을 열어 검색 결과를 보여준다.
+    /// 네이버 지도 URL Scheme(`nmap://search`)을 사용하며, 앱 미설치 시 네이버 지도
+    /// 모바일 웹 검색으로 폴백한다(검색 결과는 동일하게 노출).
+    /// 사전 조건: Info.plist 의 LSApplicationQueriesSchemes 에 `nmap` 등록 필요(canOpenURL).
+    private func openNaverMapSearch(_ poi: CarWashPOI) {
+        // 검색어 = 주소 + 상호명.
+        // 상호명만 넘기면 동명의 다른 지역 업체가 잡힐 수 있어, 위치를 고정하는
+        // 주소를 함께 넘겨 정확도를 높인다. 주소가 없으면 상호명만 사용.
+        let trimmedAddress = poi.address.trimmingCharacters(in: .whitespaces)
+        let hasValidAddress = !trimmedAddress.isEmpty && trimmedAddress != "주소 없음"
+        let query = hasValidAddress ? "\(trimmedAddress) \(poi.name)" : poi.name
+
+        // URL 쿼리로 안전하게 인코딩.
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            showToast("검색어 처리에 실패했어요.")
+            return
+        }
+
+        // 1) 네이버 지도 앱이 설치돼 있으면 앱으로 검색 화면 열기
+        if let appURL = URL(string: "nmap://search?query=\(encoded)&appname=com.devbada.WashHub"),
+           UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+            return
+        }
+
+        // 2) 미설치 시 네이버 지도 모바일 웹 검색으로 폴백
+        if let webURL = URL(string: "https://map.naver.com/p/search/\(encoded)") {
+            UIApplication.shared.open(webURL)
+        } else {
+            showToast("네이버 지도를 열 수 없어요.")
+        }
     }
 
     // MARK: - 전화 걸기

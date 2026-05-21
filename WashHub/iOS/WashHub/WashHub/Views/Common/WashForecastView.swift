@@ -43,11 +43,12 @@ struct WashForecastView: View {
             .navigationTitle("세차 예측")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                // v2 — 좌상단 백 버튼 (시스템 back 스타일)
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.theme.textDisabled)
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.theme.textPrimary)
                     }
                 }
             }
@@ -76,7 +77,7 @@ struct WashForecastView: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 14))
                         .foregroundColor(.theme.secondary)
-                    Text("이번 주 최적의 세차일")
+                    Text("이번 주 세차 베스트 데이")
                         .font(.appCaptionBold)
                         .foregroundColor(.theme.secondary)
                 }
@@ -227,7 +228,7 @@ struct WashForecastView: View {
             Image(systemName: "cloud.sun.bolt")
                 .font(.system(size: 40))
                 .foregroundColor(.theme.textDisabled)
-            Text("예보 데이터를 가져올 수 없습니다")
+            Text("예보를 가져올 수 없어요")
                 .font(.appCaption)
                 .foregroundColor(.theme.textDisabled)
             Button("다시 시도") {

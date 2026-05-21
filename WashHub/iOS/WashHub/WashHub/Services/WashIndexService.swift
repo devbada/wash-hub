@@ -52,41 +52,53 @@ final class WashIndexService: ObservableObject {
         do {
             let sidoName = guesssSido(lat: latitude, lng: longitude)
 
-            // Edge Function 호출 페이로드
-            struct WeatherRequest: Encodable {
+            // [v2 버그 수정] 'current' 모드는 KMA 현재값 조회 실패 시 폴백(강수0/습도50/온도20)이
+            // 그대로 점수 계산에 들어가 비 오는 날에도 항상 99점 "완벽한 날"이 나오는 결함이 있었음.
+            // → 정상 동작하는 'forecast' 모드를 호출하고 '오늘' 데이터로 세차지수를 구성한다.
+            struct ForecastRequest: Encodable {
                 let nx: Int
                 let ny: Int
                 let sidoName: String
+                let mode: String
             }
-            let payload = WeatherRequest(nx: grid.x, ny: grid.y, sidoName: sidoName)
+            let payload = ForecastRequest(nx: grid.x, ny: grid.y, sidoName: sidoName, mode: "forecast")
 
             // Supabase SDK 가 자동으로 Authorization 헤더(JWT)를 포함
-            let result: WeatherProxyResponse = try await supabase.functions
+            let result: ForecastProxyResponse = try await supabase.functions
                 .invoke(
                     "weather-proxy",
                     options: .init(body: payload)
                 )
 
+            // '오늘' 예보 항목으로 세차지수 카드 구성 — 7일 예보 화면과 동일 값으로 정합성 보장
+            guard let today = result.forecasts.first(where: { $0.dayLabel == "오늘" })
+                    ?? result.forecasts.first else {
+                throw NSError(domain: "WashIndex", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "오늘 예보 데이터 없음"])
+            }
+
             let loaded = WashIndex(
-                score: result.score,
-                message: result.message,
-                recommendation: result.recommendation,
-                forecastNote: result.forecastNote,
+                score: today.score,
+                message: today.message,
+                recommendation: recommendation(forScore: today.score),
+                forecastNote: nil,
                 details: WashIndex.WashIndexDetails(
-                    rainProbability: result.weather.rainProbability,
-                    fineDust: result.dust.pm10,
-                    humidity: result.weather.humidity,
-                    temperature: result.weather.temperature
+                    rainProbability: today.rainProbability,
+                    fineDust: today.dustPm10,
+                    humidity: today.humidity,
+                    temperature: Double(today.tempMax)
                 )
             )
             washIndex = loaded
             Self.washIndexCache.set(loaded, for: key)
+            // 7일 예보도 같은 응답으로 캐시에 채워둠 — 예측 화면 진입 시 재호출 불필요 + 점수 정합성
+            Self.forecastCache.set(result.forecasts, for: key)
         } catch {
             print("WashIndex load error: \(error)")
             // 에러 시 기본값 (캐시에 저장하지 않음 — 다음 호출에 재시도)
             washIndex = WashIndex(
                 score: 50,
-                message: "날씨 정보를 가져올 수 없습니다",
+                message: "날씨 정보를 가져올 수 없어요",
                 recommendation: "날씨를 직접 확인해주세요",
                 forecastNote: nil,
                 details: WashIndex.WashIndexDetails(
@@ -99,6 +111,17 @@ final class WashIndexService: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    /// 세차지수 점수 → 추천 문구 (해요체)
+    private func recommendation(forScore score: Int) -> String {
+        switch score {
+        case 80...:     return "지금 세차하기 딱 좋아요"
+        case 60..<80:   return "세차할 만한 날이에요"
+        case 40..<60:   return "괜찮지만 날씨를 한 번 더 확인해요"
+        case 20..<40:   return "오늘은 미루는 게 좋아요"
+        default:        return "오늘은 좀 쉬어요"
+        }
     }
 
     // MARK: - 7일 예보 로드

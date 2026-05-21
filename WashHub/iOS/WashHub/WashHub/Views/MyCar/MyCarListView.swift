@@ -6,11 +6,15 @@ import Supabase
 enum MyCarNavTarget: Hashable {
     case stats                    // 세차 통계
     case washLogs(String)         // car id → WashLogListView
+    case vehicleDetail(String)    // car id → VehicleDetailView (v2)
+    case feedDetail(String)       // feed id → FeedDetailView (세차 기록의 '피드 보기')
 }
 
 struct MyCarListView: View {
     @EnvironmentObject var navCoordinator: NavigationCoordinator
     @State private var myCars: [MyCar] = []
+    /// v2 — 세차 통계 카드 / 최근 세차 카드용 세차 기록
+    @State private var washLogs: [WashLog] = []
     @State private var isLoading = true
     @State private var showAddCar = false
     @State private var showStats = false
@@ -43,17 +47,20 @@ struct MyCarListView: View {
                     if let car = myCars.first(where: { $0.id == carId }) {
                         WashLogListView(car: car)
                     }
+                case .vehicleDetail(let carId):
+                    if let car = myCars.first(where: { $0.id == carId }) {
+                        VehicleDetailView(
+                            car: car,
+                            onEdit: { editingCar = car },
+                            onDelete: { Task { await deleteCar(car) } }
+                        )
+                    }
+                case .feedDetail(let feedId):
+                    FeedDetailView(feedId: feedId)
                 }
             }
             .toolbar {
-                // 좌측: 세차 통계 진입
-                ToolbarItem(placement: .navigationBarLeading) {
-                    NavigationLink(value: MyCarNavTarget.stats) {
-                        Image(systemName: "chart.bar.fill")
-                            .foregroundColor(.theme.secondary)
-                    }
-                }
-                // 우측: 차량 추가
+                // 우측: 차량 추가 (세차 통계는 v2 통계 카드로 노출)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showAddCar = true }) {
                         Image(systemName: "plus")
@@ -62,10 +69,10 @@ struct MyCarListView: View {
                 }
             }
             .sheet(isPresented: $showAddCar) {
-                AddMyCarView { await loadCars() }
+                AddMyCarView { await reloadAll() }
             }
         }
-        .task { await loadCars() }
+        .task { await reloadAll() }
     }
 
     @State private var editingCar: MyCar?
@@ -79,7 +86,7 @@ struct MyCarListView: View {
                 Color.clear.frame(height: 0).id("top")
                 ForEach(myCars) { car in
                     // value-based — myCarPath 로 pop 가능
-                    NavigationLink(value: MyCarNavTarget.washLogs(car.id)) {
+                    NavigationLink(value: MyCarNavTarget.vehicleDetail(car.id)) {
                         MyCarCard(car: car)
                     }
                     .buttonStyle(.plain)
@@ -98,6 +105,15 @@ struct MyCarListView: View {
                     }
                 }
 
+                // v2 — 세차 통계 요약 카드 (기존엔 상단 아이콘에만 숨어 있던 기능)
+                statsCard
+
+                // v2 — 내 세차 리듬 / 다음 세차 (기존엔 마이페이지에만 있던 카드)
+                WashRhythmCard()
+
+                // v2 — 최근 세차 카드
+                recentWashSection
+
                 // 마지막 카드가 탭바 overlay 뒤에 가리지 않도록 가상 빈 아이템
                 BottomTabBarSpacer()
             }
@@ -105,7 +121,7 @@ struct MyCarListView: View {
             .padding(.top, 16)
         }
         .sheet(item: $editingCar) { car in
-            AddMyCarView(editCar: car) { await loadCars() }
+            AddMyCarView(editCar: car) { await reloadAll() }
         }
         .alert("차량 삭제", isPresented: $showDeleteConfirm) {
             Button("취소", role: .cancel) { deletingCar = nil }
@@ -183,9 +199,171 @@ struct MyCarListView: View {
             // wash_log가 함께 삭제되었으므로 아이콘 캐시도 무효화 → 다음 업데이트 시 재조회
             DynamicIconService.shared.invalidateWashLogCache()
             await DynamicIconService.shared.updateIconIfNeeded()
-            await loadCars()
+            await reloadAll()
         } catch {
             print("Delete car error: \(error)")
+        }
+    }
+
+    // MARK: - v2 통계/리듬/최근 세차
+
+    private var primaryCar: MyCar? { myCars.first }
+
+    private var currentYearText: String {
+        String(Calendar.current.component(.year, from: Date()))
+    }
+    private var currentYearMonth: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Seoul")
+        f.dateFormat = "yyyy-MM"
+        return f.string(from: Date())
+    }
+    private var totalWashCount: Int { washLogs.count }
+    private var thisMonthWashCount: Int {
+        washLogs.filter { $0.washDate.hasPrefix(currentYearMonth) }.count
+    }
+    private var thisYearWashCount: Int {
+        washLogs.filter { $0.washDate.hasPrefix(currentYearText) }.count
+    }
+
+    /// 세차 통계 요약 카드 — 탭하면 전체 통계 화면으로 진입
+    private var statsCard: some View {
+        NavigationLink(value: MyCarNavTarget.stats) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(currentYearText)년 · 잘하고 있어요")
+                            .font(.appLabelSmall)
+                            .fontWeight(.heavy)
+                            .foregroundColor(.theme.tertiary)
+                        Text("내 세차 통계")
+                            .font(.appHeadline3)
+                            .foregroundColor(.theme.onPrimary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.theme.onPrimary)
+                }
+                HStack(spacing: 10) {
+                    statCell(value: "\(totalWashCount)", unit: "회", label: "총 세차")
+                    statCell(value: "\(thisMonthWashCount)", unit: "회", label: "이번 달")
+                    statCell(value: "\(thisYearWashCount)", unit: "회", label: "올해")
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.theme.primary)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func statCell(value: String, unit: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            (Text(value).font(.headline(22)) + Text(unit).font(.appSmall))
+                .foregroundColor(.theme.onPrimary)
+            Text(label)
+                .font(.appSmall)
+                .foregroundColor(.theme.onPrimary.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+    }
+
+    /// 최근 세차 카드
+    @ViewBuilder
+    private var recentWashSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("최근 세차")
+                .font(.appHeadline3)
+                .foregroundColor(.theme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let log = washLogs.first, let carId = primaryCar?.id {
+                NavigationLink(value: MyCarNavTarget.washLogs(carId)) {
+                    recentWashCard(log)
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: "drop")
+                        .foregroundColor(.theme.textDisabled)
+                    Text("아직 세차 기록이 없어요. 첫 세차를 남겨볼까요?")
+                        .font(.appCaption)
+                        .foregroundColor(.theme.textSecondary)
+                    Spacer()
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.theme.surfaceLow)
+                )
+            }
+        }
+    }
+
+    private func recentWashCard(_ log: WashLog) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color.theme.tertiary, Color.theme.secondary],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 56, height: 56)
+                Image(systemName: "drop.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(log.washDate)
+                    .font(.appLabelSmall)
+                    .fontWeight(.heavy)
+                    .foregroundColor(.theme.textSecondary)
+                Text(log.memo?.isEmpty == false ? log.memo! : "세차 완료")
+                    .font(.appCaptionBold)
+                    .foregroundColor(.theme.textPrimary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .foregroundColor(.theme.textDisabled)
+        }
+        .padding(14)
+        .cardStyle()
+    }
+
+    /// 차량 + 세차 기록 동시 로드
+    private func reloadAll() async {
+        await loadCars()
+        await loadWashLogs()
+    }
+
+    private func loadWashLogs() async {
+        let carIds = myCars.map { $0.id }
+        guard !carIds.isEmpty else {
+            washLogs = []
+            return
+        }
+        do {
+            let persistLogs: [WashLog] = try await supabase
+                .from("wash_logs")
+                .select("*, feeds(id, content, thumbnail_url, like_count, comment_count)")
+                .in("car_id", values: carIds)
+                .eq("status", value: "ACTIVE")
+                .order("wash_date", ascending: false)
+                .execute()
+                .value
+            washLogs = persistLogs
+        } catch {
+            print("Wash logs load error: \(error)")
         }
     }
 
@@ -592,9 +770,9 @@ struct WashLogRow: View {
 
                     Spacer()
 
-                    // 피드 연결 뱃지
-                    if log.feeds != nil {
-                        NavigationLink(destination: FeedDetailView(feedId: log.feeds!.id)) {
+                    // 피드 연결 뱃지 — value-based push (destination-based 는 path 연동 불안정)
+                    if let linkedFeed = log.feeds {
+                        NavigationLink(value: MyCarNavTarget.feedDetail(linkedFeed.id)) {
                             HStack(spacing: 4) {
                                 Image(systemName: "doc.text.image")
                                     .font(.system(size: 11))

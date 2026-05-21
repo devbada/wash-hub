@@ -128,7 +128,7 @@ struct WashStatsView: View {
                         Image(systemName: "flask")
                             .font(.system(size: 28))
                             .foregroundColor(.theme.textDisabled)
-                        Text("사용 기록이 없습니다")
+                        Text("아직 사용 기록이 없어요")
                             .font(.appCaption)
                             .foregroundColor(.theme.textDisabled)
                     }
@@ -207,7 +207,7 @@ struct WashStatsView: View {
                         Image(systemName: "building.2")
                             .font(.system(size: 28))
                             .foregroundColor(.theme.textDisabled)
-                        Text("방문 기록이 없습니다")
+                        Text("아직 가본 세차장이 없어요")
                             .font(.appCaption)
                             .foregroundColor(.theme.textDisabled)
                         Text("세차장에서 세차 기록을 남기면 여기에 표시돼요")
@@ -274,7 +274,7 @@ struct WashStatsView: View {
                 Image(systemName: "chart.bar")
                     .font(.system(size: 28))
                     .foregroundColor(.theme.textDisabled)
-                Text("세차 기록이 없습니다")
+                Text("아직 세차 기록이 없어요")
                     .font(.appCaption)
                     .foregroundColor(.theme.textDisabled)
             }

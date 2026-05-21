@@ -2,6 +2,8 @@ import SwiftUI
 import Supabase
 
 struct MyPageView: View {
+    /// 모달(드로어) 진입 여부 — true일 때만 좌상단 백버튼 표시 (push 진입 시 시스템 백버튼과 중복 방지)
+    var isModal: Bool = false
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) private var dismiss
     @StateObject private var feedService = FeedService()
@@ -60,6 +62,18 @@ struct MyPageView: View {
         // large title(좌측 큰 글씨)이 잠시 펼쳐진 상태로 표시되는 transition 글리치 발생.
         // 다른 화면들과 일관되게 inline 으로 고정.
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 모달 진입 시에만 — push 진입 시엔 시스템 백버튼이 있으므로 중복 방지
+            if isModal {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.theme.textPrimary)
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showEditProfile, onDismiss: {
             // 프로필 편집 후 최신 프로필 반영 보장
             Task {
@@ -331,7 +345,7 @@ struct MyPageView: View {
             let previewLimit = 5
             let feeds = Array(allFeeds.prefix(previewLimit))
             if allFeeds.isEmpty {
-                Text(selectedTab == 0 ? "작성한 피드가 없습니다" : "좋아요한 피드가 없습니다")
+                Text(selectedTab == 0 ? "작성한 피드가 없어요" : "좋아요한 피드가 없어요")
                     .font(.appCaption)
                     .foregroundColor(.theme.textDisabled)
                     .frame(maxWidth: .infinity)
@@ -447,7 +461,7 @@ struct MyPageView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "trophy")
                         .foregroundColor(.theme.textDisabled)
-                    Text("아직 획득한 뱃지가 없습니다")
+                    Text("아직 획득한 뱃지가 없어요")
                         .font(.appCaption)
                         .foregroundColor(.theme.textDisabled)
                 }
@@ -503,7 +517,7 @@ struct MyPageView: View {
                 Text("뱃지 획득!")
                     .font(.appCaptionMedium)
                     .foregroundColor(.theme.textPrimary)
-                Text("「\(toastBadgeName)」 뱃지를 획득했습니다")
+                Text("「\(toastBadgeName)」 뱃지를 획득했어요")
                     .font(.appSmall)
                     .foregroundColor(.theme.textSecondary)
             }
@@ -602,7 +616,7 @@ struct MyPageView: View {
                     Task { try? await authManager.signOut() }
                 }
             } message: {
-                Text("로그아웃하시겠습니까?")
+                Text("로그아웃할까요?")
             }
 
             Button(action: { showWithdrawConfirm = true }) {
@@ -632,7 +646,7 @@ struct MyPageView: View {
                     }
                 }
             } message: {
-                Text("정말 탈퇴하시겠습니까?\n계정이 비활성화되며 재가입 시 새로운 계정으로 시작됩니다.")
+                Text("정말 탈퇴할까요?\n계정이 비활성화되고, 재가입 시 새로운 계정으로 시작돼요.")
             }
             .alert("탈퇴 실패", isPresented: .init(
                 get: { withdrawError != nil },
@@ -796,7 +810,7 @@ struct EditProfileView: View {
             .alert("저장 완료", isPresented: $showSuccess) {
                 Button("확인") { dismiss() }
             } message: {
-                Text("프로필이 업데이트되었습니다.")
+                Text("프로필이 업데이트됐어요.")
             }
             // BottomSheet 가 form 위에 보이도록 overlay 로 부착
             .overlay(
@@ -839,7 +853,7 @@ struct EditProfileView: View {
                 if trimmedNickname != originalNickname {
                     let isDuplicate = try await authManager.checkNicknameDuplicate(trimmedNickname)
                     if isDuplicate {
-                        errorMessage = "이미 사용 중인 닉네임입니다."
+                        errorMessage = "이미 사용 중인 닉네임이에요."
                         isLoading = false
                         return
                     }
@@ -865,14 +879,14 @@ struct EditProfileView: View {
                 if let image = selectedAvatar {
                     guard let imageData = image.jpegDataUnder(maxDimension: 1024, maxBytes: 2 * 1024 * 1024) else {
                         // TODO-minam: 인코딩 실패 시 사용자 알림
-                        errorMessage = "이미지 처리에 실패했습니다. 다른 사진으로 시도해주세요."
+                        errorMessage = "이미지 처리에 실패했어요. 다른 사진으로 시도해주세요."
                         isLoading = false
                         return
                     }
                     // 서버 버킷 제한(5MB) 안전 검증 — 정책이 바뀌어도 클라이언트에서 한 번 더 차단
                     let serverLimit = 5 * 1024 * 1024
                     if imageData.count > serverLimit {
-                        errorMessage = "이미지 용량이 너무 큽니다. 더 작은 사진을 선택해주세요."
+                        errorMessage = "이미지 용량이 너무 커요. 더 작은 사진을 선택해주세요."
                         isLoading = false
                         return
                     }
@@ -910,7 +924,7 @@ struct EditProfileView: View {
                 showSuccess = true
             } catch {
                 // TODO-minam: 에러 코드별 세분화된 메시지 처리
-                errorMessage = "프로필 저장에 실패했습니다. 잠시 후 다시 시도해주세요."
+                errorMessage = "프로필 저장에 실패했어요. 잠시 후 다시 시도해주세요."
                 print("Profile update error: \(error)")
             }
             isLoading = false

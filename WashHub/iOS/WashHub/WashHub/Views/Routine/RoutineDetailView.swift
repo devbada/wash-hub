@@ -39,8 +39,8 @@ struct RoutineDetailView: View {
                         else { showFollowRoutine = true }
                     }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "play.fill")
-                            Text("따라하기 시작")
+                            Image(systemName: "play.circle.fill")
+                            Text("이대로 따라해볼래요")
                         }
                         .primaryButtonStyle()
                     }

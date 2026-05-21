@@ -40,7 +40,8 @@ enum CoachmarkTooltipPlacement {
 /// 향후 단계가 추가되면 `CoachmarkVersion.homeV2` 등으로 새 버전 키를 만들고
 /// UserDefaults 키를 갱신하여 한 번 더 노출시킨다.
 enum CoachmarkVersion {
-    static let homeV1 = "coachmark.home.v1.shown"
+    /// v2 IA 개편(P2-012)으로 탭 구조가 바뀌어 키를 bump — 기존 사용자에게 1회 재노출
+    static let homeV1 = "coachmark.home.v2.shown"
 }
 
 enum HomeCoachmark {
@@ -54,37 +55,37 @@ enum HomeCoachmark {
             placement: .center
         ),
         CoachmarkStep(
-            id: "tab.feed",
-            title: "Before / After 피드",
-            message: "세차 전후 사진을 비교하며 후기를 공유해보세요.",
-            anchorId: CoachmarkAnchorID.tabFeed,
+            id: "tab.home",
+            title: "홈",
+            message: "오늘의 세차 지수와 바로가기, 피드 미리보기를\n홈에서 한눈에 볼 수 있어요.",
+            anchorId: CoachmarkAnchorID.tabHome,
             placement: .topOf
         ),
         CoachmarkStep(
-            id: "tab.routine",
-            title: "내 세차 루틴",
-            message: "단계별 루틴을 따라하며 깔끔하게 기록할 수 있어요.",
-            anchorId: CoachmarkAnchorID.tabRoutine,
+            id: "tab.carwash",
+            title: "세차장",
+            message: "근처 세차장을 지도에서 바로 찾아볼 수 있어요.",
+            anchorId: CoachmarkAnchorID.tabCarWash,
             placement: .topOf
         ),
         CoachmarkStep(
             id: "fab.create",
-            title: "피드 작성",
-            message: "여기를 눌러 새 피드를 작성하거나 사진을 업로드 해보세요.",
+            title: "기록 남기기",
+            message: "여기를 눌러 세차 사진과 후기를 남겨보세요.",
             anchorId: CoachmarkAnchorID.fabCreate,
             placement: .topOf
         ),
         CoachmarkStep(
             id: "tab.equipment",
-            title: "케미컬 / 장비",
-            message: "내가 쓰는 케미컬과 장비 후기를 한곳에서 모아봐요.",
+            title: "세차용품",
+            message: "샴푸·왁스 같은 세차용품과 루틴 가이드를 모아봤어요.",
             anchorId: CoachmarkAnchorID.tabEquipment,
             placement: .topOf
         ),
         CoachmarkStep(
             id: "tab.mycar",
-            title: "내 차 / 세차 기록",
-            message: "내 차를 등록하면 세차 기록이 자동으로 쌓이고\n앱 아이콘이 세차 주기에 따라 바뀌어요.",
+            title: "내차",
+            message: "내 차를 등록하면 세차 기록과 통계가 자동으로 쌓이고\n앱 아이콘도 세차 주기에 따라 바뀌어요.",
             anchorId: CoachmarkAnchorID.tabMyCar,
             placement: .topOf
         ),
@@ -100,8 +101,8 @@ enum HomeCoachmark {
 
 /// Anchor ID 상수 — 컴파일 타임에 오타 방지
 enum CoachmarkAnchorID {
-    static let tabFeed      = "tab.feed"
-    static let tabRoutine   = "tab.routine"
+    static let tabHome      = "tab.home"
+    static let tabCarWash   = "tab.carwash"
     static let tabEquipment = "tab.equipment"
     static let tabMyCar     = "tab.mycar"
     static let fabCreate    = "fab.create"
