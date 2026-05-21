@@ -7,6 +7,8 @@ struct WashHubApp: App {
     /// 탭별 NavigationStack path + scroll-to-top 트리거를 중앙 관리
     /// (탭 재탭 시 pop-to-root 동작 — CONVENTIONS.md 6.1 참조)
     @StateObject private var navCoordinator = NavigationCoordinator()
+    /// 테마 선택 상태 — 변경 시 .id 로 뷰 트리를 리빌드해 즉시 반영
+    @StateObject private var themeManager = ThemeManager.shared
     @Environment(\.scenePhase) private var scenePhase
 
     /// 앱 시작 시 1.5초간 SplashView 노출 — 동적 아이콘 + 앱명
@@ -27,6 +29,9 @@ struct WashHubApp: App {
                 ContentView()
                     .environmentObject(authManager)
                     .environmentObject(navCoordinator)
+                    .environmentObject(themeManager)
+                    // 테마 변경 시 뷰 트리 전체를 새 정체성으로 리빌드 → Color.theme 즉시 반영
+                    .id(themeManager.current)
                     .preferredColorScheme(.light)
                     .scaleEffect(isSplashVisible ? 0.96 : 1.0)
                     .opacity(isSplashVisible ? 0 : 1)

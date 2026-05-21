@@ -9,6 +9,7 @@ struct SettingsView: View {
     let onClose: () -> Void
 
     @EnvironmentObject var authManager: AuthManager
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     @State private var showTerms = false
     @State private var showPrivacy = false
@@ -23,6 +24,15 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 8) {
+                        // 테마 변경
+                        NavigationLink {
+                            ThemeSelectionView()
+                        } label: {
+                            settingRow(icon: "paintpalette", label: "테마 변경",
+                                       value: themeManager.current.nameKo)
+                        }
+                        .buttonStyle(.plain)
+
                         // 차단 관리
                         NavigationLink {
                             BlockedUsersListView()
@@ -111,7 +121,7 @@ struct SettingsView: View {
     }
 
     // MARK: - 설정 행
-    private func settingRow(icon: String, label: String) -> some View {
+    private func settingRow(icon: String, label: String, value: String? = nil) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 16))
@@ -123,6 +133,11 @@ struct SettingsView: View {
                 .font(.appBody)
                 .foregroundColor(.theme.textPrimary)
             Spacer()
+            if let value {
+                Text(value)
+                    .font(.appCaption)
+                    .foregroundColor(.theme.textSecondary)
+            }
             Image(systemName: "chevron.right")
                 .font(.system(size: 14))
                 .foregroundColor(.theme.textDisabled)

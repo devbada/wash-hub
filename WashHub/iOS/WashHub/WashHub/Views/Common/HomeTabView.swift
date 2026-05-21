@@ -381,7 +381,7 @@ struct HomeTabView: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color(red: 132/255, green: 204/255, blue: 22/255).opacity(0.35),
+                                Color.theme.primary.opacity(0.35),
                                 Color.clear
                             ],
                             center: .center,
@@ -396,8 +396,8 @@ struct HomeTabView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(red: 132/255, green: 204/255, blue: 22/255),
-                                Color(red: 101/255, green: 163/255, blue: 13/255)
+                                Color.theme.primaryContainer,
+                                Color.theme.primary
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -408,7 +408,7 @@ struct HomeTabView: View {
                         Circle()
                             .stroke(Color.white.opacity(0.35), lineWidth: 2)
                     )
-                    .shadow(color: Color(red: 101/255, green: 163/255, blue: 13/255).opacity(0.5), radius: 16, x: 0, y: 8)
+                    .shadow(color: Color.theme.primary.opacity(0.5), radius: 16, x: 0, y: 8)
                     .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
 
                 Image(systemName: "plus")

@@ -542,6 +542,23 @@ struct MyPageView: View {
     // MARK: - 설정
     private var settingsSection: some View {
         VStack(spacing: 8) {
+            // 테마 변경 — 4종 파스텔 테마 선택
+            NavigationLink {
+                ThemeSelectionView()
+            } label: {
+                HStack {
+                    Text("테마 변경")
+                        .font(.appBody)
+                        .foregroundColor(.theme.textSecondary)
+                    Spacer()
+                    Image(systemName: "paintpalette")
+                        .foregroundColor(.theme.textDisabled)
+                }
+                .padding(16)
+                .cardStyle()
+            }
+            .buttonStyle(.plain)
+
             // 도움말 다시 보기 — 첫 사용자 코치마크 강제 재실행
             Button(action: replayCoachmark) {
                 HStack {

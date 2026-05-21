@@ -64,7 +64,8 @@ struct HomeView: View {
         }
         .task {
             washTipHint = HomeView.washTipHints.randomElement() ?? washTipHint
-            await feedService.loadFeeds(maxCount: 2)
+            // 홈 진입/재진입 시 강제 새로고침 — 다른 화면에서 바뀐 좋아요/댓글 수 반영
+            await feedService.loadFeeds(forceRefresh: true, maxCount: 2)
             // 홈 진입/재진입 시 미확인 알림 수 갱신 — 알림 점 표시용
             if !authManager.isGuest {
                 await notificationService.fetchUnreadCount()
@@ -75,6 +76,10 @@ struct HomeView: View {
             if newPhase == .active, !authManager.isGuest {
                 Task { await notificationService.fetchUnreadCount() }
             }
+        }
+        // 다른 화면에서 좋아요/댓글 수가 바뀌면 피드 미리보기 즉시 갱신
+        .onReceive(NotificationCenter.default.publisher(for: .feedCountChanged)) { _ in
+            Task { await feedService.loadFeeds(forceRefresh: true, maxCount: 2) }
         }
     }
 
@@ -191,7 +196,7 @@ struct HomeView: View {
     private var feedPeekSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("다른 분들 세차 구경")
+                Text("세차 후기 살펴보기")
                     .font(.appHeadline2)
                     .foregroundColor(.theme.textPrimary)
                 Spacer()
