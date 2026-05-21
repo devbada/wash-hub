@@ -98,7 +98,7 @@ struct ThemeSelectionView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(isSelected ? Color.theme.secondary : Color.theme.outlineVariant,
+                    .strokeBorder(isSelected ? Color.theme.accent : Color.theme.outlineVariant,
                                   lineWidth: isSelected ? 2 : 1)
             )
         }

@@ -200,7 +200,7 @@ struct UserProfileView: View {
                     .padding(.vertical, 3)
                     .background(
                         Capsule()
-                            .fill(Color.theme.secondary.opacity(0.15))
+                            .fill(Color.theme.accent.opacity(0.15))
                     )
                 }
 

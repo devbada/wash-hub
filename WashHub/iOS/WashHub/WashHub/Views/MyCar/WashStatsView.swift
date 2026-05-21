@@ -516,7 +516,7 @@ struct MonthlyBarChart: View {
                     }
 
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(stat.count > 0 ? Color.theme.secondary : Color.theme.border.opacity(0.3))
+                        .fill(stat.count > 0 ? Color.theme.accent : Color.theme.border.opacity(0.3))
                         .frame(height: stat.count > 0
                             ? CGFloat(stat.count) / CGFloat(maxCount) * 130
                             : 4

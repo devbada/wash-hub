@@ -55,7 +55,7 @@ struct FollowListView: View {
                             .font(.appBodyMedium)
                             .foregroundColor(selectedTab == tab ? .theme.textPrimary : .theme.textDisabled)
                         Rectangle()
-                            .fill(selectedTab == tab ? Color.theme.secondary : Color.clear)
+                            .fill(selectedTab == tab ? Color.theme.accent : Color.clear)
                             .frame(height: 2)
                     }
                 }

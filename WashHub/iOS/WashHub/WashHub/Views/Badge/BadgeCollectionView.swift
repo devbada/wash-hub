@@ -91,7 +91,7 @@ struct BadgeCollectionView: View {
                         .fill(Color.theme.surfaceContainer)
                         .frame(height: 8)
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.theme.secondary)
+                        .fill(Color.theme.accent)
                         .frame(width: geo.size.width * progress, height: 8)
                 }
             }
@@ -158,7 +158,7 @@ struct BadgeGridItem: View {
 
     private var gradientColors: [Color] {
         guard let type = BadgeType(rawValue: badge.badgeType) else {
-            return [.theme.secondary, .theme.secondaryDim]
+            return [.theme.accentBright, .theme.accent]
         }
         let (start, end) = type.gradientColors
         return [Color(hex: start), Color(hex: end)]
@@ -237,7 +237,7 @@ struct BadgeDetailSheet: View {
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(isUnlocked ? Color.theme.secondary.opacity(0.1) : Color.theme.surfaceLow)
+                                .fill(isUnlocked ? Color.theme.accent.opacity(0.1) : Color.theme.surfaceLow)
                         )
                     }
 
@@ -307,7 +307,7 @@ struct BadgeDetailSheet: View {
 
     private var gradientColors: [Color] {
         guard let type = BadgeType(rawValue: badge.badgeType) else {
-            return [.theme.secondary, .theme.secondaryDim]
+            return [.theme.accentBright, .theme.accent]
         }
         let (start, end) = type.gradientColors
         return [Color(hex: start), Color(hex: end)]

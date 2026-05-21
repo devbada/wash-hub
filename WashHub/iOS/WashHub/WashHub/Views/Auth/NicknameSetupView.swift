@@ -128,7 +128,7 @@ struct NicknameSetupView: View {
 
     private var statusBorderColor: Color {
         if isChecked && !isDuplicate {
-            return .theme.tertiary
+            return .theme.accent
         } else if isChecked && isDuplicate {
             return .theme.error
         }

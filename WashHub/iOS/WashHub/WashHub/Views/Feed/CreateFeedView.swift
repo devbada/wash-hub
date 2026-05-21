@@ -226,11 +226,11 @@ struct CreateFeedView: View {
                                                     VStack(alignment: .leading, spacing: 2) {
                                                         Text(car.carModel)
                                                             .font(.appSmall)
-                                                            .foregroundColor(selectedCarId == car.id ? .white : .theme.textPrimary)
+                                                            .foregroundColor(selectedCarId == car.id ? .theme.onAccent : .theme.textPrimary)
                                                         if let color = car.carColor {
                                                             Text(color)
                                                                 .font(.system(size: 10))
-                                                                .foregroundColor(selectedCarId == car.id ? .white.opacity(0.85) : .theme.textDisabled)
+                                                                .foregroundColor(selectedCarId == car.id ? .theme.onAccent.opacity(0.85) : .theme.textDisabled)
                                                         }
                                                     }
                                                 }
@@ -238,7 +238,7 @@ struct CreateFeedView: View {
                                                 .padding(.vertical, 8)
                                                 .background(
                                                     selectedCarId == car.id
-                                                        ? Color.theme.secondary
+                                                        ? Color.theme.accent
                                                         : Color.theme.surface
                                                 )
                                                 .cornerRadius(10)
@@ -246,7 +246,7 @@ struct CreateFeedView: View {
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .stroke(
                                                             selectedCarId == car.id
-                                                                ? Color.theme.secondary
+                                                                ? Color.theme.accent
                                                                 : Color.theme.border,
                                                             lineWidth: 1
                                                         )
@@ -380,7 +380,7 @@ struct CreateFeedView: View {
                     } else {
                         Text("게시")
                             .font(.appBodyBold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.theme.onAccent)
                     }
                 }
                 .frame(minWidth: 40)
@@ -389,12 +389,12 @@ struct CreateFeedView: View {
                 .background(
                     Capsule().fill(
                         LinearGradient(
-                            colors: [Color.theme.tertiary, Color.theme.secondary],
+                            colors: [Color.theme.accentBright, Color.theme.accent],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                     )
                 )
-                .shadow(color: Color.theme.secondary.opacity(0.35), radius: 10, x: 0, y: 5)
+                .shadow(color: Color.theme.accent.opacity(0.35), radius: 10, x: 0, y: 5)
                 .opacity(canSubmit ? 1.0 : 0.4)
             }
             .buttonStyle(.plain)
@@ -414,8 +414,8 @@ struct CreateFeedView: View {
         onAdd: @escaping () -> Void
     ) -> some View {
         let isAfter = (title == "After")
-        let accent = isAfter ? Color.theme.secondary : Color.theme.outline
-        let tint = isAfter ? Color.theme.secondary.opacity(0.10) : Color.theme.surfaceLow
+        let accent = isAfter ? Color.theme.accent : Color.theme.outline
+        let tint = isAfter ? Color.theme.accent.opacity(0.10) : Color.theme.surfaceLow
         let labelColor = isAfter ? Color.theme.secondary : Color.theme.onSurfaceVariant
         let isThumb = thumbnailSource == (isAfter ? .after : .before)
         let cardHeight: CGFloat = 168
@@ -474,11 +474,11 @@ struct CreateFeedView: View {
                     ZStack {
                         if isThumb {
                             Circle()
-                                .fill(Color.theme.secondary)
+                                .fill(Color.theme.accent)
                                 .frame(width: 17, height: 17)
                             Image(systemName: "checkmark")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.theme.onAccent)
                         } else {
                             Circle()
                                 .strokeBorder(Color.theme.outline, lineWidth: 2)

@@ -57,7 +57,7 @@ struct WashIndexCard: View {
             HStack {
                 Spacer()
                 Circle()
-                    .fill(Color.theme.secondary.opacity(0.1))
+                    .fill(Color.theme.accent.opacity(0.1))
                     .frame(width: 120, height: 120)
                     .blur(radius: 40)
                     .offset(x: 30, y: -20)
@@ -217,25 +217,21 @@ struct WashIndexCard: View {
     }
 
     /// 세차지수 점수 → 5단계 컬러 스펙트럼
-    /// 빨강(나쁨) → 주황 → 노랑 → 라임 → 짙은 Citrus(아주 좋음)
-    /// 디자인 시스템(Carbon & Citrus)의 기조색을 따르되 시각 식별성을 위해 중간톤은 자연색 사용
+    /// 좋음(그린) → 보통(앰버) → 나쁨(레드) 의 의미 전달용 시맨틱 색.
+    /// v3 파스텔 테마와 어울리도록 기존 시트러스/원색을 톤다운한 자연색으로 교체.
+    /// (품질 신호이므로 테마와 무관하게 일관 유지 — 에러색만 테마 error 사용)
     private func scoreColor(_ score: Int) -> Color {
         switch score {
         case 90...100:
-            // 매우 좋음 — 짙은 Citrus (브랜드 시그니처)
-            return Color(red: 101/255, green: 163/255, blue: 13/255)   // #65A30D
+            return Color(hex: 0x4F9D69)   // 매우 좋음 — 부드러운 그린
         case 75..<90:
-            // 좋음 — 밝은 Citrus
-            return Color(red: 132/255, green: 204/255, blue: 22/255)   // #84CC16
+            return Color(hex: 0x74AE74)   // 좋음 — 연한 그린
         case 55..<75:
-            // 보통 — 따뜻한 노랑
-            return Color(red: 234/255, green: 179/255, blue: 8/255)    // #EAB308 (Tailwind yellow-500)
+            return Color(hex: 0xE0A23C)   // 보통 — 부드러운 앰버
         case 35..<55:
-            // 별로 — 주황
-            return Color(red: 249/255, green: 115/255, blue: 22/255)   // #F97316 (Tailwind orange-500)
+            return Color(hex: 0xDD8A5C)   // 별로 — 코랄 오렌지
         default:
-            // 나쁨 — 짙은 빨강 (디자인 시스템 error)
-            return .theme.error                                         // #DC2626
+            return .theme.error           // 나쁨 — 테마 error
         }
     }
 }

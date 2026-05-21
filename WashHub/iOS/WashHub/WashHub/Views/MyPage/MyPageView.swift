@@ -236,7 +236,7 @@ struct MyPageView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(
-                                Capsule().fill(Color.theme.secondary.opacity(0.12))
+                                Capsule().fill(Color.theme.accent.opacity(0.12))
                             )
                         }
                     }
@@ -321,7 +321,7 @@ struct MyPageView: View {
                             .font(.appCaptionMedium)
                             .foregroundColor(selectedTab == 0 ? .theme.secondary : .theme.textDisabled)
                         Rectangle()
-                            .fill(selectedTab == 0 ? Color.theme.secondary : Color.clear)
+                            .fill(selectedTab == 0 ? Color.theme.accent : Color.clear)
                             .frame(height: 2)
                     }
                 }
@@ -333,7 +333,7 @@ struct MyPageView: View {
                             .font(.appCaptionMedium)
                             .foregroundColor(selectedTab == 1 ? .theme.secondary : .theme.textDisabled)
                         Rectangle()
-                            .fill(selectedTab == 1 ? Color.theme.secondary : Color.clear)
+                            .fill(selectedTab == 1 ? Color.theme.accent : Color.clear)
                             .frame(height: 2)
                     }
                 }
@@ -419,7 +419,7 @@ struct MyPageView: View {
                             .padding(.vertical, 12)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.theme.secondary.opacity(0.08))
+                                    .fill(Color.theme.accent.opacity(0.08))
                             )
                         }
                         .buttonStyle(.plain)
@@ -501,7 +501,7 @@ struct MyPageView: View {
 
     private func badgeGradient(_ badge: Badge) -> [Color] {
         guard let type = BadgeType(rawValue: badge.badgeType) else {
-            return [.theme.secondary, .theme.secondaryDim]
+            return [.theme.accentBright, .theme.accent]
         }
         let (start, end) = type.gradientColors
         return [Color(hex: start), Color(hex: end)]
@@ -754,17 +754,17 @@ struct EditProfileView: View {
                                 .frame(width: 96, height: 96)
                                 .clipShape(Circle())
                                 .overlay(
-                                    Circle().stroke(Color.theme.secondary.opacity(0.4), lineWidth: 2)
+                                    Circle().stroke(Color.theme.accent.opacity(0.4), lineWidth: 2)
                                 )
 
                                 // 카메라 뱃지
                                 Circle()
-                                    .fill(Color.theme.secondary)
+                                    .fill(Color.theme.accent)
                                     .frame(width: 30, height: 30)
                                     .overlay(
                                         Image(systemName: "camera.fill")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(.theme.onAccent)
                                     )
                                     .overlay(Circle().stroke(Color.theme.surface, lineWidth: 2))
                                     .offset(x: 2, y: 2)

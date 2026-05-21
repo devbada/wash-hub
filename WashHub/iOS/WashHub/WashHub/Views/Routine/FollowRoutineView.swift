@@ -179,7 +179,7 @@ struct FollowRoutineView: View {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(
                             LinearGradient(
-                                colors: [Color.theme.primary, Color.theme.secondary],
+                                colors: [Color.theme.accentBright, Color.theme.accent],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -212,12 +212,12 @@ struct FollowRoutineView: View {
                 if isCompleted {
                     ZStack {
                         Circle()
-                            .fill(Color.theme.secondary)
+                            .fill(Color.theme.accent)
                             .frame(width: 32, height: 32)
-                            .shadow(color: Color.theme.secondary.opacity(0.4), radius: 8)
+                            .shadow(color: Color.theme.accent.opacity(0.4), radius: 8)
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.theme.surface)
+                            .foregroundColor(.theme.onAccent)
                     }
                 } else if isCurrent {
                     ZStack {
@@ -261,7 +261,7 @@ struct FollowRoutineView: View {
             .overlay(
                 HStack {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(isCompleted ? Color.theme.secondary : (isCurrent ? Color.theme.primary : Color.clear))
+                        .fill(isCompleted ? Color.theme.accent : (isCurrent ? Color.theme.primary : Color.clear))
                         .frame(width: 4)
                     Spacer()
                 }
@@ -296,18 +296,18 @@ struct FollowRoutineView: View {
                         Text("완료하기")
                     }
                     .font(.appBodyBold)
-                    .foregroundColor(.theme.surface)
+                    .foregroundColor(.theme.onAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
                         LinearGradient(
-                            colors: [Color.theme.secondary, Color.theme.secondaryDim],
+                            colors: [Color.theme.accentBright, Color.theme.accent],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .cornerRadius(12)
-                    .shadow(color: Color.theme.secondary.opacity(0.3), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.theme.accent.opacity(0.3), radius: 10, x: 0, y: 4)
                 }
                 .disabled(!isStarted || executionService.isCompleted)
                 .opacity(!isStarted || executionService.isCompleted ? 0.4 : 1.0)
@@ -323,18 +323,18 @@ struct FollowRoutineView: View {
                         Image(systemName: "chevron.right")
                     }
                     .font(.appBodyBold)
-                    .foregroundColor(.theme.surface)
+                    .foregroundColor(.theme.onAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
                         LinearGradient(
-                            colors: [Color.theme.secondary, Color.theme.secondary.opacity(0.8)],
+                            colors: [Color.theme.accentBright, Color.theme.accent],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .cornerRadius(12)
-                    .shadow(color: Color.theme.secondary.opacity(0.3), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.theme.accent.opacity(0.3), radius: 10, x: 0, y: 4)
                 }
                 .disabled(!isStarted || executionService.isCompleted)
                 .opacity(!isStarted || executionService.isCompleted ? 0.4 : 1.0)

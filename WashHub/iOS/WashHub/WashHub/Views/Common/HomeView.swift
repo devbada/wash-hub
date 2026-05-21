@@ -149,7 +149,7 @@ struct HomeView: View {
             let cols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
             LazyVGrid(columns: cols, spacing: 10) {
                 quickCard(icon: "map.fill", title: "근처 세차장", hint: "지도에서 찾기",
-                          bg: Color.theme.tertiary, fg: .white) { onSelectTab(1) }
+                          bg: Color.theme.accent, fg: Color.theme.onAccent) { onSelectTab(1) }
                 quickCard(icon: "drop.fill", title: "세차용품", hint: "샴푸 · 왁스 · 코팅",
                           bg: Color.theme.surfaceLowest, fg: Color.theme.textPrimary) { onSelectTab(3) }
                 quickCard(icon: "list.bullet.clipboard.fill", title: "세차 잘하는 법", hint: washTipHint,
@@ -259,7 +259,7 @@ struct HomeView: View {
                                 .foregroundColor(.theme.secondary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
-                                .background(Color.theme.secondary.opacity(0.12))
+                                .background(Color.theme.accent.opacity(0.12))
                                 .clipShape(Capsule())
                         }
                     }

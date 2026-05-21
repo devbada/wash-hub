@@ -200,7 +200,7 @@ struct WashForecastView: View {
         .padding(16)
         .background(
             day.dayLabel == "오늘"
-                ? Color.theme.secondary.opacity(0.05)
+                ? Color.theme.accent.opacity(0.05)
                 : Color.theme.surfaceLowest
         )
         .cornerRadius(14)
@@ -208,7 +208,7 @@ struct WashForecastView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
                     day.dayLabel == "오늘"
-                        ? Color.theme.secondary.opacity(0.3)
+                        ? Color.theme.accent.opacity(0.3)
                         : Color.clear,
                     lineWidth: 1
                 )

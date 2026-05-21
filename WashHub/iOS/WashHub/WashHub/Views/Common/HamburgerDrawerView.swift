@@ -138,7 +138,7 @@ struct HamburgerDrawerView: View {
         let cols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
         return LazyVGrid(columns: cols, spacing: 10) {
             bigCard(icon: "cloud.sun.fill", title: "오늘 세차할까?", hint: "세차 예측 보기",
-                    bg: Color.theme.tertiary, fg: .white, dest: .washIndex)
+                    bg: Color.theme.accent, fg: Color.theme.onAccent, dest: .washIndex)
             bigCard(icon: "map.fill", title: "어디서 세차하지?", hint: "근처 세차장",
                     bg: Color.theme.primary, fg: Color.theme.onPrimary, dest: .map)
             bigCard(icon: "drop.fill", title: "뭐로 세차하지?", hint: "케미컬 · 루틴",

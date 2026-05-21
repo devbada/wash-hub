@@ -101,7 +101,7 @@ struct FaceMosaicEditorView: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill((isDrawMode ? Color.theme.secondary : Color.theme.tertiary).opacity(0.15))
+                        .fill((isDrawMode ? Color.theme.accent : Color.theme.accent).opacity(0.15))
                 )
             }
         }
@@ -144,10 +144,10 @@ struct FaceMosaicEditorView: View {
                 if isDrawMode, let start = dragStart, let current = dragCurrent {
                     let dragRect = normalizedDragRect(start: start, current: current)
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.theme.tertiary, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
+                        .stroke(Color.theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.theme.tertiary.opacity(0.15))
+                                .fill(Color.theme.accent.opacity(0.15))
                         )
                         .frame(width: dragRect.width, height: dragRect.height)
                         .offset(x: dragRect.origin.x, y: dragRect.origin.y)
@@ -232,15 +232,15 @@ struct FaceMosaicEditorView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
                     face.isManual
-                        ? (face.isSelected ? Color.theme.tertiary : Color.white.opacity(0.6))
-                        : (face.isSelected ? Color.theme.secondary : Color.white.opacity(0.6)),
+                        ? (face.isSelected ? Color.theme.accent : Color.white.opacity(0.6))
+                        : (face.isSelected ? Color.theme.accent : Color.white.opacity(0.6)),
                     lineWidth: face.isSelected ? 3 : 2
                 )
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(
                             face.isSelected
-                                ? (face.isManual ? Color.theme.tertiary : Color.theme.secondary).opacity(0.15)
+                                ? (face.isManual ? Color.theme.accent : Color.theme.accent).opacity(0.15)
                                 : Color.clear
                         )
                 )
@@ -265,7 +265,7 @@ struct FaceMosaicEditorView: View {
                             Circle()
                                 .fill(
                                     face.isSelected
-                                        ? (face.isManual ? Color.theme.tertiary : Color.theme.secondary)
+                                        ? (face.isManual ? Color.theme.accent : Color.theme.accent)
                                         : Color.white.opacity(0.5)
                                 )
                         )

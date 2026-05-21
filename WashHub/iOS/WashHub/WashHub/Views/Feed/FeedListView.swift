@@ -379,7 +379,7 @@ struct FeedListView: View {
                 .clipShape(Circle())
                 .overlay(
                     Circle()
-                        .stroke(Color.theme.secondary.opacity(0.35), lineWidth: 1.5)
+                        .stroke(Color.theme.accent.opacity(0.35), lineWidth: 1.5)
                 )
             } else {
                 fallbackAvatar

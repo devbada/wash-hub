@@ -138,7 +138,7 @@ struct CoachmarkOverlay: View {
                 ForEach(controller.steps.indices, id: \.self) { idx in
                     Circle()
                         .fill(idx == controller.currentIndex
-                              ? Color.theme.tertiary
+                              ? Color.theme.accent
                               : Color.white.opacity(0.35))
                         .frame(width: 8, height: 8)
                 }
@@ -179,12 +179,12 @@ private struct TooltipBubble: View {
                 Button(action: onNext) {
                     Text(nextButtonTitle)
                         .font(.appBodyBold)
-                        .foregroundColor(.theme.primary)
+                        .foregroundColor(.theme.onPrimary)
                         .padding(.horizontal, 22)
                         .padding(.vertical, 11)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.theme.tertiary)
+                                .fill(Color.theme.primary)
                         )
                 }
             }

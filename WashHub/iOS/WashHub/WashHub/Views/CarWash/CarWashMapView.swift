@@ -229,12 +229,12 @@ struct CarWashMapView: View {
                     Button(action: { confirmNaverNotice(poi) }) {
                         Text("검색하기")
                             .font(.appBodyBold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.theme.onAccent)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
                             .background(
                                 LinearGradient(
-                                    colors: [.theme.tertiary, .theme.secondary],
+                                    colors: [.theme.accentBright, .theme.accent],
                                     startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
                             .cornerRadius(14)
@@ -369,16 +369,16 @@ struct CarWashMapView: View {
 
     private func markerColor(for poi: CarWashPOI) -> Color {
         if selectedPOI?.id == poi.id {
-            return poi.isRegistered ? Color.theme.tertiary : Color.theme.secondary
+            return poi.isRegistered ? Color.theme.accent : Color.theme.accent
         }
-        return poi.isRegistered ? Color.theme.tertiary.opacity(0.85) : Color.theme.surfaceLow
+        return poi.isRegistered ? Color.theme.accent.opacity(0.85) : Color.theme.surfaceLow
     }
 
     private func markerIconColor(for poi: CarWashPOI) -> Color {
         if selectedPOI?.id == poi.id {
-            return .white
+            return .theme.onAccent
         }
-        return poi.isRegistered ? .white : .theme.secondary
+        return poi.isRegistered ? .theme.onAccent : .theme.secondary
     }
 
     // MARK: - 선택된 세차장 카드
@@ -398,7 +398,7 @@ struct CarWashMapView: View {
                                 .foregroundColor(.theme.tertiary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.theme.tertiary.opacity(0.15))
+                                .background(Color.theme.accent.opacity(0.15))
                                 .cornerRadius(4)
                         }
                     }
@@ -458,12 +458,12 @@ struct CarWashMapView: View {
                 }) {
                     Text("더 자세히 찾아보기")
                         .font(.appBodyBold)
-                        .foregroundColor(.white)
+                        .foregroundColor(.theme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
                         .background(
                             LinearGradient(
-                                colors: [.theme.tertiary, .theme.secondary],
+                                colors: [.theme.accentBright, .theme.accent],
                                 startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .cornerRadius(14)
@@ -517,10 +517,10 @@ struct CarWashMapView: View {
             }) {
                 Text("설정으로 이동")
                     .font(.appLabel)
-                    .foregroundColor(.white)
+                    .foregroundColor(.theme.onAccent)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Color.theme.secondary)
+                    .background(Color.theme.accent)
                     .cornerRadius(20)
             }
         }

@@ -385,7 +385,7 @@ struct MyCarListView: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.theme.secondary.opacity(0.12))
+                    .fill(Color.theme.accent.opacity(0.12))
             )
         }
         .buttonStyle(.plain)
@@ -461,12 +461,12 @@ struct MyCarListView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(LinearGradient(
-                        colors: [Color.theme.tertiary, Color.theme.secondary],
+                        colors: [Color.theme.accentBright, Color.theme.accent],
                         startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 56, height: 56)
                 Image(systemName: "drop.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(.white)
+                    .foregroundColor(.theme.onAccent)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(log.washDate)
@@ -577,7 +577,7 @@ struct MyCarCard: View {
                         .padding(.vertical, 2)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.theme.secondary.opacity(0.12))
+                                .fill(Color.theme.accent.opacity(0.12))
                         )
                 }
                 Text(car.carModel)
@@ -958,7 +958,7 @@ struct WashLogRow: View {
                             .padding(.vertical, 5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.theme.secondary.opacity(0.12))
+                                    .fill(Color.theme.accent.opacity(0.12))
                             )
                         }
                         .buttonStyle(.plain)

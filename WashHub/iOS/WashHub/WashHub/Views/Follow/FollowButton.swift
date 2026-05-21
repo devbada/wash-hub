@@ -14,13 +14,13 @@ struct FollowButton: View {
             } else {
                 Text(isFollowing ? "팔로우 해제" : "팔로우")
                     .font(.appSmall)
-                    .foregroundColor(isFollowing ? .theme.textSecondary : .theme.onPrimary)
+                    .foregroundColor(isFollowing ? .theme.textSecondary : .theme.onAccent)
                     .frame(width: 80, height: 32)
             }
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isFollowing ? Color.theme.surfaceHigh : Color.theme.secondary)
+                .fill(isFollowing ? Color.theme.surfaceHigh : Color.theme.accent)
         )
     }
 }

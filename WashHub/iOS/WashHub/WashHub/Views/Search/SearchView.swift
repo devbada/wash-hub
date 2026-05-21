@@ -187,12 +187,12 @@ struct SearchView: View {
                                     .font(.system(size: 11, weight: .bold))
                             }
                         }
-                        .foregroundColor(selectedTab == tab ? .theme.surface : .theme.textSecondary)
+                        .foregroundColor(selectedTab == tab ? .theme.onAccent : .theme.textSecondary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .background(
                             Capsule()
-                                .fill(selectedTab == tab ? Color.theme.secondary : Color.theme.surfaceHigh)
+                                .fill(selectedTab == tab ? Color.theme.accent : Color.theme.surfaceHigh)
                         )
                     }
                 }

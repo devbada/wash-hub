@@ -71,10 +71,10 @@ struct VehicleDetailView: View {
                 Text("대표 차량")
                     .font(.appLabelSmall)
                     .fontWeight(.heavy)
-                    .foregroundColor(.white)
+                    .foregroundColor(.theme.onAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.theme.secondary))
+                    .background(Capsule().fill(Color.theme.accent))
                     .padding(14)
             }
         }

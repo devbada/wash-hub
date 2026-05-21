@@ -57,13 +57,13 @@ struct ReportSheet: View {
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
                                             .fill(selectedReason == reason
-                                                  ? Color.theme.secondary.opacity(0.08)
+                                                  ? Color.theme.accent.opacity(0.08)
                                                   : Color.theme.surfaceLowest)
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 10)
                                             .stroke(selectedReason == reason
-                                                    ? Color.theme.secondary.opacity(0.3)
+                                                    ? Color.theme.accent.opacity(0.3)
                                                     : Color.theme.border,
                                                     lineWidth: 1)
                                     )

@@ -132,14 +132,14 @@ struct NotificationRow: View {
                 // 안 읽음 표시
                 if !notification.isRead {
                     Circle()
-                        .fill(Color.theme.secondary)
+                        .fill(Color.theme.accent)
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(notification.isRead ? Color.clear : Color.theme.secondary.opacity(0.05))
+            .background(notification.isRead ? Color.clear : Color.theme.accent.opacity(0.05))
         }
         .buttonStyle(.plain)
     }

@@ -689,7 +689,7 @@ struct CommentRow: View {
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.theme.secondary.opacity(0.3), lineWidth: 1)
+                                .stroke(Color.theme.accent.opacity(0.3), lineWidth: 1)
                         )
                 }
             }
@@ -949,11 +949,11 @@ struct EditFeedView: View {
                                                     VStack(alignment: .leading, spacing: 2) {
                                                         Text(car.carModel)
                                                             .font(.appSmall)
-                                                            .foregroundColor(selectedCarId == car.id ? .white : .theme.textPrimary)
+                                                            .foregroundColor(selectedCarId == car.id ? .theme.onAccent : .theme.textPrimary)
                                                         if let color = car.carColor {
                                                             Text(color)
                                                                 .font(.system(size: 10))
-                                                                .foregroundColor(selectedCarId == car.id ? .white.opacity(0.85) : .theme.textDisabled)
+                                                                .foregroundColor(selectedCarId == car.id ? .theme.onAccent.opacity(0.85) : .theme.textDisabled)
                                                         }
                                                     }
                                                 }
@@ -961,7 +961,7 @@ struct EditFeedView: View {
                                                 .padding(.vertical, 8)
                                                 .background(
                                                     selectedCarId == car.id
-                                                        ? Color.theme.secondary
+                                                        ? Color.theme.accent
                                                         : Color.theme.surface
                                                 )
                                                 .cornerRadius(10)
@@ -969,7 +969,7 @@ struct EditFeedView: View {
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .stroke(
                                                             selectedCarId == car.id
-                                                                ? Color.theme.secondary
+                                                                ? Color.theme.accent
                                                                 : Color.theme.border,
                                                             lineWidth: 1
                                                         )

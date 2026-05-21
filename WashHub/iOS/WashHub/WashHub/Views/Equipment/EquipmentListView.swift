@@ -274,7 +274,7 @@ struct EquipmentCard: View {
                         .foregroundColor(.theme.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.theme.secondary.opacity(0.15))
+                        .background(Color.theme.accent.opacity(0.15))
                         .cornerRadius(4)
 
                     if (equipment.rating ?? 0) > 0 {
@@ -353,7 +353,7 @@ struct EquipmentDetailView: View {
                                 .foregroundColor(.theme.secondary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.theme.secondary.opacity(0.15))
+                                .background(Color.theme.accent.opacity(0.15))
                                 .cornerRadius(6)
 
                             if (equipment.rating ?? 0) > 0 {
@@ -507,7 +507,7 @@ struct EquipmentDetailView: View {
                         .foregroundColor(.theme.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.theme.secondary.opacity(0.15))
+                        .background(Color.theme.accent.opacity(0.15))
                         .cornerRadius(8)
                 }
 
@@ -584,7 +584,7 @@ struct EquipmentDetailView: View {
                             .font(.system(size: 16))
                             .foregroundColor(.theme.secondary)
                             .frame(width: 32, height: 32)
-                            .background(Color.theme.secondary.opacity(0.12))
+                            .background(Color.theme.accent.opacity(0.12))
                             .cornerRadius(8)
 
                         Text("\(link.provider.displayName)에서 구매")
@@ -1007,10 +1007,10 @@ struct EditEquipmentView: View {
                                         Button(action: { category = cat }) {
                                             Text(cat)
                                                 .font(.appSmall)
-                                                .foregroundColor(category == cat ? .white : .theme.textSecondary)
+                                                .foregroundColor(category == cat ? .theme.onAccent : .theme.textSecondary)
                                                 .padding(.horizontal, 14)
                                                 .padding(.vertical, 8)
-                                                .background(category == cat ? Color.theme.secondary : Color.theme.surface)
+                                                .background(category == cat ? Color.theme.accent : Color.theme.surface)
                                                 .cornerRadius(20)
                                         }
                                     }
@@ -1285,10 +1285,10 @@ struct AddEquipmentView: View {
                                         Button(action: { category = cat }) {
                                             Text(cat)
                                                 .font(.appSmall)
-                                                .foregroundColor(category == cat ? .black : .theme.textSecondary)
+                                                .foregroundColor(category == cat ? .theme.onAccent : .theme.textSecondary)
                                                 .padding(.horizontal, 14)
                                                 .padding(.vertical, 8)
-                                                .background(category == cat ? Color.theme.secondary : Color.theme.surface)
+                                                .background(category == cat ? Color.theme.accent : Color.theme.surface)
                                                 .cornerRadius(20)
                                         }
                                     }

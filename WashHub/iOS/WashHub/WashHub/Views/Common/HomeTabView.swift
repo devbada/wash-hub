@@ -381,7 +381,7 @@ struct HomeTabView: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color.theme.primary.opacity(0.35),
+                                Color.theme.accent.opacity(0.35),
                                 Color.clear
                             ],
                             center: .center,
@@ -396,8 +396,8 @@ struct HomeTabView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.theme.primaryContainer,
-                                Color.theme.primary
+                                Color.theme.accentBright,
+                                Color.theme.accent
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -408,12 +408,12 @@ struct HomeTabView: View {
                         Circle()
                             .stroke(Color.white.opacity(0.35), lineWidth: 2)
                     )
-                    .shadow(color: Color.theme.primary.opacity(0.5), radius: 16, x: 0, y: 8)
+                    .shadow(color: Color.theme.accent.opacity(0.5), radius: 16, x: 0, y: 8)
                     .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
 
                 Image(systemName: "plus")
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.theme.onAccent)
             }
         }
         .buttonStyle(FABPressStyle())

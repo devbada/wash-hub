@@ -96,13 +96,13 @@ struct CarWashListView: View {
                                         .font(.appLabel)
                                         .foregroundColor(
                                             selectedCategory == category
-                                            ? .white : .theme.textSecondary
+                                            ? .theme.onAccent : .theme.textSecondary
                                         )
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 8)
                                         .background(
                                             selectedCategory == category
-                                            ? Color.theme.secondary : Color.theme.surface
+                                            ? Color.theme.accent : Color.theme.surface
                                         )
                                         .cornerRadius(20)
                                 }
@@ -139,10 +139,10 @@ struct CarWashListView: View {
                                     Text("지도에서 찾기")
                                 }
                                 .font(.appLabel)
-                                .foregroundColor(.white)
+                                .foregroundColor(.theme.onAccent)
                                 .padding(.horizontal, 18)
                                 .padding(.vertical, 10)
-                                .background(Capsule().fill(Color.theme.secondary))
+                                .background(Capsule().fill(Color.theme.accent))
                             }
                             .padding(.top, 4)
                         }
@@ -561,7 +561,7 @@ struct CarWashDetailView: View {
                         .foregroundColor(.theme.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.theme.secondary.opacity(0.15))
+                        .background(Color.theme.accent.opacity(0.15))
                         .cornerRadius(8)
                 }
 
@@ -926,7 +926,7 @@ struct FlexibleChipsView: View {
                     .foregroundColor(.theme.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.theme.secondary.opacity(0.12))
+                    .background(Color.theme.accent.opacity(0.12))
                     .cornerRadius(12)
             }
         }
@@ -1037,10 +1037,10 @@ struct EditCarWashView: View {
                         Button(action: { category = cat }) {
                             Text(cat)
                                 .font(.appSmall)
-                                .foregroundColor(category == cat ? .white : .theme.textSecondary)
+                                .foregroundColor(category == cat ? .theme.onAccent : .theme.textSecondary)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(category == cat ? Color.theme.secondary : Color.theme.surface)
+                                .background(category == cat ? Color.theme.accent : Color.theme.surface)
                                 .cornerRadius(20)
                         }
                     }
@@ -1069,10 +1069,10 @@ struct EditCarWashView: View {
                             Text(facility)
                         }
                         .font(.appSmall)
-                        .foregroundColor(isSelected ? .white : .theme.textSecondary)
+                        .foregroundColor(isSelected ? .theme.onAccent : .theme.textSecondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(isSelected ? Color.theme.secondary : Color.theme.surface)
+                        .background(isSelected ? Color.theme.accent : Color.theme.surface)
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.theme.border, lineWidth: isSelected ? 0 : 1))
                     }
@@ -1180,10 +1180,10 @@ struct AddCarWashView: View {
                                         Button(action: { category = cat }) {
                                             Text(cat)
                                                 .font(.appSmall)
-                                                .foregroundColor(category == cat ? .white : .theme.textSecondary)
+                                                .foregroundColor(category == cat ? .theme.onAccent : .theme.textSecondary)
                                                 .padding(.horizontal, 14)
                                                 .padding(.vertical, 8)
-                                                .background(category == cat ? Color.theme.secondary : Color.theme.surface)
+                                                .background(category == cat ? Color.theme.accent : Color.theme.surface)
                                                 .cornerRadius(20)
                                         }
                                     }
@@ -1211,10 +1211,10 @@ struct AddCarWashView: View {
                                             Text(facility)
                                         }
                                         .font(.appSmall)
-                                        .foregroundColor(isSelected ? .white : .theme.textSecondary)
+                                        .foregroundColor(isSelected ? .theme.onAccent : .theme.textSecondary)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 6)
-                                        .background(isSelected ? Color.theme.secondary : Color.theme.surface)
+                                        .background(isSelected ? Color.theme.accent : Color.theme.surface)
                                         .cornerRadius(12)
                                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.theme.border, lineWidth: isSelected ? 0 : 1))
                                     }
@@ -1364,12 +1364,12 @@ struct CarWashMiniMapView: View {
                     VStack(spacing: 2) {
                         ZStack {
                             Circle()
-                                .fill(Color.theme.secondary)
+                                .fill(Color.theme.accent)
                                 .frame(width: 32, height: 32)
                                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                             Image(systemName: "drop.fill")
                                 .font(.system(size: 14))
-                                .foregroundColor(.white)
+                                .foregroundColor(.theme.onAccent)
                         }
                         Text(name)
                             .font(.system(size: 9, weight: .bold))
@@ -1397,10 +1397,10 @@ struct CarWashMiniMapView: View {
                     Text("길찾기")
                         .font(.appLabel)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(.theme.onAccent)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.theme.secondary)
+                .background(Color.theme.accent)
                 .cornerRadius(16)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
             }
