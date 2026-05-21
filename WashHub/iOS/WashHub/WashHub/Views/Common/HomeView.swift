@@ -18,6 +18,8 @@ struct HomeView: View {
     @StateObject private var feedService = FeedService()
     /// 알림 점 표시 — 미확인 알림 수
     @ObservedObject private var notificationService = NotificationService.shared
+    /// 앱 포그라운드 복귀 감지 — 알림 수 재조회용
+    @Environment(\.scenePhase) private var scenePhase
 
     /// "세차 잘하는 법" 카드 부제 — 진입 시 랜덤 노출
     @State private var washTipHint: String = HomeView.washTipHints.randomElement() ?? "초보용 4가지 코스"
@@ -63,6 +65,16 @@ struct HomeView: View {
         .task {
             washTipHint = HomeView.washTipHints.randomElement() ?? washTipHint
             await feedService.loadFeeds(maxCount: 2)
+            // 홈 진입/재진입 시 미확인 알림 수 갱신 — 알림 점 표시용
+            if !authManager.isGuest {
+                await notificationService.fetchUnreadCount()
+            }
+        }
+        // 앱이 포그라운드로 돌아오면 알림 수 재조회 (백그라운드 중 도착한 알림 반영)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active, !authManager.isGuest {
+                Task { await notificationService.fetchUnreadCount() }
+            }
         }
     }
 
