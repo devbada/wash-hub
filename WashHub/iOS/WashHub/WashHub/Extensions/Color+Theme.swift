@@ -1,9 +1,9 @@
 import SwiftUI
 
 extension Color {
-    /// 현재 적용 중인 테마 색상. ThemeManager 가 테마 변경 시 갱신한다.
+    /// 현재 적용 중인 테마 색상. 기본값은 가독성 중심 Neutral + Olive 시스템이다.
     /// (앱 전반이 `Color.theme.xxx` 로 참조하므로 전역 var 로 둔다.)
-    nonisolated(unsafe) static var theme: ColorTheme = .periwinkle
+    nonisolated(unsafe) static var theme: ColorTheme = .readableNeutral
 
     /// 0xRRGGBB 정수로 Color 생성
     init(hex: UInt) {
@@ -15,10 +15,10 @@ extension Color {
     }
 }
 
-// MARK: - Pastel Theme Collection (Design System v3)
+// MARK: - WashHub Color Theme
 //
-// 검정 기반 Carbon & Citrus 폐기. 사용자가 고르는 4종 파스텔 테마.
-// 디자인 시스템: design-system/re-design-v2/WashHub Design System/DESIGN.md
+// 앱 기본 팔레트는 Neutral + Olive로 고정한다.
+// 기존 파스텔 팔레트는 저장값 마이그레이션 기간 동안만 보존한다.
 //
 // 구조: 디자이너가 확정한 토큰을 스토어드 프로퍼티로 보관하고,
 // 앱 전반에서 쓰는 기존 토큰명(secondary, surfaceHigh 등)은 파생 접근자로 노출한다.
@@ -36,7 +36,7 @@ struct ColorTheme {
     /// primary 배경 위 텍스트
     let onPrimary: Color
 
-    /// 파스텔 액센트 (peach / lavender / pink)
+    /// 상태 및 선택 액센트
     let accent: Color
     /// 밝은 액센트
     let accentBright: Color
@@ -73,14 +73,13 @@ struct ColorTheme {
 
     // MARK: 파생 / 호환 접근자
     //
-    // 기존 코드가 쓰던 토큰명을 유지한다. 파스텔 테마에서는 가독성을 위해
-    // 강조색(secondary/tertiary)을 텍스트로도 안전한 primary 계열로 매핑한다.
+    // 기존 코드가 쓰던 토큰명을 유지해 화면별 마이그레이션을 단계적으로 진행한다.
 
-    /// 강조색 — primary 계열 (텍스트로도 안전한 대비 확보)
-    var secondary: Color { primary }
-    var secondaryDim: Color { primaryDim }
-    /// 서브 강조 — primary 계열
-    var tertiary: Color { primary }
+    /// 기존 화면의 상태·선택 강조색
+    var secondary: Color { accent }
+    var secondaryDim: Color { accent }
+    /// 제한적인 밝은 강조
+    var tertiary: Color { accentBright }
     /// 정보 강조
     var infoBlue: Color { primary }
     /// 깊은 에러
@@ -112,7 +111,29 @@ struct ColorTheme {
 
 extension ColorTheme {
 
-    /// 테마 A — Periwinkle Cream (기본)
+    /// 기본 테마 — Neutral + Olive
+    static let readableNeutral = ColorTheme(
+        primary:          Color(hex: 0x34343A),
+        primaryDim:       Color(hex: 0x27272C),
+        primaryContainer: Color(hex: 0x45454D),
+        onPrimary:        Color(hex: 0xFAFAFA),
+        accent:           Color(hex: 0x5F7F20),
+        accentBright:     Color(hex: 0x84CC16),
+        accentBg:         Color(hex: 0xEEF5DF),
+        onAccent:         Color(hex: 0x2F4310),
+        surface:          Color(hex: 0xFAFAFA),
+        surfaceLowest:    Color(hex: 0xFFFFFF),
+        surfaceLow:       Color(hex: 0xF4F4F5),
+        surfaceContainer: Color(hex: 0xE4E4E7),
+        textPrimary:      Color(hex: 0x18181B),
+        textSecondary:    Color(hex: 0x71717A),
+        onSurfaceVariant: Color(hex: 0x52525B),
+        outline:          Color(hex: 0xD4D4D8),
+        error:            Color(hex: 0xC2413A),
+        errorContainer:   Color(hex: 0xFCE8E6)
+    )
+
+    /// 레거시 테마 A — Periwinkle Cream
     static let periwinkle = ColorTheme(
         primary:          Color(hex: 0x7383D6),
         primaryDim:       Color(hex: 0x5C6DC4),

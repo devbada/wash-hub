@@ -3,33 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7383D6" />
     <title>WashHub 이용약관</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-            background: #0D1117; color: #E6EDF3; line-height: 1.7;
-            padding: 20px; max-width: 720px; margin: 0 auto;
+        /* WashHub Design System — Periwinkle (Pastel v3) — Legal pages */
+        :root {
+            --primary: #7383D6;
+            --primary-dim: #5C6DC4;
+            --primary-container: #A0AEE4;
+            --accent: #F2BEA0;
+            --accent-bg: #FBE5D5;
+            --surface: #FAF8F2;
+            --surface-lowest: #FFFFFF;
+            --surface-low: #F3F1EA;
+            --surface-container: #E8E5DC;
+            --text-primary: #2D3563;
+            --text-secondary: #6A719B;
+            --text-disabled: #A8AEC8;
+            --on-surface-variant: #4F5685;
+            --outline: #CFD4EE;
+            --outline-variant: #E3E6F5;
+            --error: #C75450;
+            --gradient-primary: linear-gradient(135deg, #A0AEE4 0%, #7383D6 100%);
         }
-        h1 { font-size: 22px; color: #00E5FF; margin-bottom: 8px; }
-        h2 { font-size: 17px; color: #00E5FF; margin: 28px 0 12px; border-bottom: 1px solid #21262D; padding-bottom: 6px; }
-        h3 { font-size: 15px; color: #C9D1D9; margin: 16px 0 8px; }
-        p { margin-bottom: 10px; font-size: 14px; color: #C9D1D9; }
-        ul, ol { margin: 8px 0 12px 20px; font-size: 14px; color: #C9D1D9; }
-        li { margin-bottom: 4px; }
-        .effective-date { font-size: 13px; color: #8B949E; margin-bottom: 24px; }
-        .highlight { color: #32FF7E; font-weight: 600; }
-        .warning { color: #F85149; font-weight: 600; }
-        .contact-box { background: #161B22; border: 1px solid #30363D; border-radius: 8px; padding: 16px; margin-top: 12px; }
-        .contact-box p { margin-bottom: 4px; }
-        .history-box { background: #0B0E13; border: 1px solid #21262D; border-radius: 6px; padding: 12px 16px; margin-top: 12px; }
-        .history-box p { font-size: 13px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+        body {
+            font-family: 'Manrope', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            background: var(--surface);
+            color: var(--text-primary);
+            line-height: 1.75;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        a { color: var(--primary); text-decoration: none; }
+        a:hover { color: var(--primary-dim); text-decoration: underline; }
+        /* 상단 네비 — 마케팅 사이트로 돌아가기 */
+        .top-nav {
+            position: sticky; top: 0; z-index: 50;
+            backdrop-filter: saturate(180%) blur(14px);
+            -webkit-backdrop-filter: saturate(180%) blur(14px);
+            background: rgba(250, 248, 242, 0.82);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .top-nav-inner {
+            max-width: 760px; margin: 0 auto;
+            padding: 14px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700; font-size: 18px;
+            color: var(--text-primary);
+        }
+        .logo-mark {
+            width: 28px; height: 28px; border-radius: 8px;
+            background: var(--gradient-primary);
+            display: grid; place-items: center;
+            box-shadow: 0 4px 10px rgba(115, 131, 214, 0.28);
+        }
+        .logo-mark svg { width: 16px; height: 16px; }
+        .nav-home {
+            font-size: 13px; font-weight: 600;
+            color: var(--text-secondary);
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--outline);
+            background: var(--surface-lowest);
+            transition: border-color .2s ease, color .2s ease, transform .2s ease;
+        }
+        .nav-home:hover {
+            color: var(--primary);
+            border-color: var(--primary-container);
+            transform: translateY(-1px);
+            text-decoration: none;
+        }
+        /* 본문 컨테이너 */
+        main {
+            max-width: 760px; margin: 0 auto;
+            padding: 40px 24px 80px;
+        }
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 30px; font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+            margin-bottom: 10px;
+        }
+        h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 20px; font-weight: 700;
+            color: var(--primary);
+            margin: 36px 0 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--outline-variant);
+            letter-spacing: -0.01em;
+        }
+        h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 16px; font-weight: 600;
+            color: var(--on-surface-variant);
+            margin: 20px 0 10px;
+        }
+        p { margin-bottom: 12px; font-size: 15px; color: var(--text-primary); }
+        ul, ol { margin: 10px 0 14px 22px; font-size: 15px; color: var(--text-primary); }
+        li { margin-bottom: 6px; }
+        strong { color: var(--text-primary); font-weight: 700; }
+        .effective-date {
+            display: inline-block;
+            font-size: 13px;
+            color: var(--on-surface-variant);
+            background: var(--accent-bg);
+            padding: 6px 14px;
+            border-radius: 999px;
+            margin-bottom: 28px;
+            font-weight: 500;
+        }
+        .highlight {
+            color: var(--primary-dim);
+            font-weight: 700;
+            background: linear-gradient(transparent 60%, rgba(160, 174, 228, 0.32) 60%);
+            padding: 0 2px;
+        }
+        .warning { color: var(--error); font-weight: 700; }
+        .contact-box {
+            background: var(--surface-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: 16px;
+            padding: 20px 22px;
+            margin-top: 14px;
+            box-shadow: 0 1px 2px rgba(45, 53, 99, 0.04), 0 8px 20px rgba(115, 131, 214, 0.08);
+        }
+        .contact-box p { margin-bottom: 6px; }
+        .history-box {
+            background: var(--surface-low);
+            border: 1px solid var(--outline-variant);
+            border-radius: 14px;
+            padding: 18px 22px;
+            margin-top: 14px;
+        }
+        .history-box p { font-size: 14px; }
+        .history-box ul { margin-top: 6px; }
+        /* 푸터 */
+        .legal-footer {
+            margin-top: 56px;
+            padding-top: 32px;
+            border-top: 1px solid var(--outline-variant);
+            text-align: center;
+        }
+        .legal-footer .links {
+            display: flex; gap: 22px;
+            justify-content: center; flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .legal-footer .links a {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .legal-footer .copy {
+            color: var(--text-disabled);
+            font-size: 13px;
+        }
+        /* 반응형 */
+        @media (max-width: 640px) {
+            main { padding: 28px 18px 64px; }
+            .top-nav-inner { padding: 12px 18px; }
+            h1 { font-size: 24px; }
+            h2 { font-size: 18px; }
+            p, ul, ol { font-size: 14.5px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+            html { scroll-behavior: auto; }
+        }
     </style>
 </head>
 <body>
 
+<nav class="top-nav" aria-label="사이트 네비게이션">
+    <div class="top-nav-inner">
+        <a href="/" class="logo" aria-label="WashHub 홈">
+            <span class="logo-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3 C12 3, 5 11, 5 16 C5 19.866 8.134 23 12 23 C15.866 23 19 19.866 19 16 C19 11, 12 3, 12 3 Z" fill="white"/>
+                </svg>
+            </span>
+            WashHub
+        </a>
+        <a href="/" class="nav-home">홈으로</a>
+    </div>
+</nav>
+
+<main>
+
 <h1>WashHub 이용약관</h1>
-<p class="effective-date">시행일: 2026년 5월 21일 | 최종 수정일: 2026년 5월 14일</p>
+<p class="effective-date">시행일: 2026년 5월 21일 · 최종 수정일: 2026년 5월 14일</p>
 
 <h2>제1조 (목적)</h2>
 <p>이 약관은 WashHub(이하 "회사")가 제공하는 세차 커뮤니티 소셜네트워킹 서비스 "WashHub"(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자 간의 권리·의무를 규정함을 목적으로 합니다.</p>
@@ -211,9 +385,16 @@
     <p style="margin-top: 8px;"><strong>2026년 4월 14일 시행 (최초 제정)</strong></p>
 </div>
 
-<p style="margin-top: 32px; color: #8B949E; font-size: 13px; text-align: center;">
-    © 2026 WashHub. All rights reserved.
-</p>
+<footer class="legal-footer">
+    <nav class="links" aria-label="법적 고지">
+        <a href="/">홈</a>
+        <a href="/privacy-policy.html">개인정보 처리방침</a>
+        <a href="mailto:imdevbada@gmail.com">문의하기</a>
+    </nav>
+    <p class="copy">© 2026 WashHub. All rights reserved.</p>
+</footer>
+
+</main>
 
 </body>
 </html>

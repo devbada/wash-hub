@@ -9,7 +9,6 @@ struct SettingsView: View {
     let onClose: () -> Void
 
     @EnvironmentObject var authManager: AuthManager
-    @ObservedObject private var themeManager = ThemeManager.shared
 
     @State private var showTerms = false
     @State private var showPrivacy = false
@@ -24,15 +23,6 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 8) {
-                        // 테마 변경
-                        NavigationLink {
-                            ThemeSelectionView()
-                        } label: {
-                            settingRow(icon: "paintpalette", label: "테마 변경",
-                                       value: themeManager.current.nameKo)
-                        }
-                        .buttonStyle(.plain)
-
                         // 차단 관리
                         NavigationLink {
                             BlockedUsersListView()

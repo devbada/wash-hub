@@ -1,6 +1,6 @@
 import SwiftUI
 import Supabase
-import CoreLocation
+internal import CoreLocation
 import MapKit
 
 // MARK: - 세차장 카테고리 / 편의시설 상수

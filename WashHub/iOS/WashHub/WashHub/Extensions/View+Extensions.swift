@@ -66,122 +66,91 @@ extension UIImage {
     }
 }
 
-// MARK: - 공통 View Modifier (Electric Neon Premium Design System)
+// MARK: - 공통 View Modifier (Readable Neutral UI System)
 extension View {
 
-    /// WashHub 카드 스타일 — No-Line Rule: 보더 없이 tonal layering
+    /// 기본 카드 — 흰 배경과 여백으로 구분
     func cardStyle() -> some View {
         self
-            .background(Color.theme.surfaceLow)
-            .cornerRadius(16)
+            .background(Color.theme.surfaceLowest)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    /// WashHub 상승 카드 — 인터렉티브 카드용
+    /// Floating 요소에만 사용하는 낮은 단계의 상승 카드
     func elevatedCardStyle() -> some View {
         self
-            .background(Color.theme.surfaceContainer)
-            .cornerRadius(16)
-            .shadow(color: Color.theme.primaryDim.opacity(0.08), radius: 20, x: 0, y: 8)
+            .background(Color.theme.surfaceLowest)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: Color.theme.textPrimary.opacity(0.06), radius: 24, x: 0, y: 8)
     }
 
-    /// Speed-line 카드 — 좌측 primary 강조선 포함
+    /// 선택된 항목에만 좌측 상태색을 표시하는 호환 카드
     func speedLineCardStyle(isActive: Bool = false) -> some View {
         self
-            .background(Color.theme.surfaceLow)
-            .cornerRadius(16)
+            .background(Color.theme.surfaceLowest)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(
                 HStack {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(isActive ? Color.theme.primary : Color.clear)
-                        .frame(width: 2)
+                        .fill(isActive ? Color.theme.accent : Color.clear)
+                        .frame(width: 3)
                     Spacer()
                 }
             )
     }
 
-    /// WashHub Hero CTA — Citrus 액센트 그라디언트, 강한 글로우
-    /// 주요 화면에서 가장 돋보여야 할 단 하나의 액션 버튼에만 사용
+    /// 화면에서 가장 중요한 단 하나의 액션
     func ctaButtonStyle() -> some View {
         self
             .font(.appBodyBold)
-            .foregroundColor(.white)
+            .foregroundColor(.theme.onPrimary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 132/255, green: 204/255, blue: 22/255),  // #84CC16 Citrus Bright
-                        Color(red: 101/255, green: 163/255, blue: 13/255)   // #65A30D Olive
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: Color(red: 101/255, green: 163/255, blue: 13/255).opacity(0.45), radius: 20, x: 0, y: 10)
-            .shadow(color: Color(red: 132/255, green: 204/255, blue: 22/255).opacity(0.25), radius: 6, x: 0, y: 2)
+            .padding(.vertical, 16)
+            .background(Color.theme.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// WashHub 프라이머리 버튼 스타일 — Gradient CTA
+    /// 기본 Primary 버튼
     func primaryButtonStyle() -> some View {
         self
             .font(.appBodyBold)
-            .foregroundColor(.theme.onPrimaryContainer)
+            .foregroundColor(.theme.onPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(
-                LinearGradient(
-                    colors: [Color.theme.primary, Color.theme.primaryContainer],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .cornerRadius(12)
-            .shadow(color: Color.theme.primary.opacity(0.4), radius: 16, x: 0, y: 8)
+            .background(Color.theme.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// WashHub 세컨더리 버튼 스타일 — Ghost style
+    /// Secondary 버튼
     func secondaryButtonStyle() -> some View {
         self
             .font(.appBodyBold)
-            .foregroundColor(.theme.primary)
+            .foregroundColor(.theme.textPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color.clear)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.theme.outline.opacity(0.4), lineWidth: 1)
-            )
+            .background(Color.theme.surfaceLow)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// WashHub Destructive 버튼 — 에러 컬러 아웃라인
+    /// 파괴적 행동 버튼
     func destructiveButtonStyle() -> some View {
         self
             .font(.appBodyBold)
             .foregroundColor(.theme.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color.clear)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.theme.error.opacity(0.4), lineWidth: 2)
-            )
+            .background(Color.theme.errorContainer)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// WashHub 텍스트 필드 스타일 — No border, tonal bg
+    /// 기본 입력 필드
     func washHubTextField() -> some View {
         self
             .font(.appBody)
             .foregroundColor(.theme.textPrimary)
             .padding(16)
-            .background(Color.theme.surfaceHighest)
-            .cornerRadius(12)
+            .background(Color.theme.surfaceLow)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     /// Glassmorphism 스타일 — 네비게이션/모달용
@@ -191,7 +160,7 @@ extension View {
             .cornerRadius(16)
     }
 
-    /// Ambient Glow Shadow — 요소가 떠 있는 느낌
+    /// Floating 요소에만 제한적으로 사용하는 Ambient Shadow
     func ambientGlow(color: Color = Color.theme.primaryDim, radius: CGFloat = 24, opacity: Double = 0.1) -> some View {
         self.shadow(color: color.opacity(opacity), radius: radius, x: 0, y: 0)
     }

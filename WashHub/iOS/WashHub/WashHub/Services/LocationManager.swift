@@ -1,5 +1,5 @@
 import Foundation
-import CoreLocation
+internal import CoreLocation
 import Combine
 
 /// Equatable 좌표 (onChange 호환)

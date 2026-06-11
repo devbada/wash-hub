@@ -1,7 +1,10 @@
 import SwiftUI
+internal import CoreLocation
 
 struct WashIndexCard: View {
     @StateObject private var washIndexService = WashIndexService()
+    /// 사용자 현재 위치 — 권한 거부 / 좌표 미확보 시 서울 기본값으로 폴백
+    @StateObject private var locationManager = LocationManager()
     @State private var showForecast = false
 
     var body: some View {
@@ -16,10 +19,38 @@ struct WashIndexCard: View {
             }
         }
         .task {
-            await washIndexService.loadWashIndex()
+            // 1) 위치 권한 분기 — 미정이면 요청, 이미 허용된 상태면 위치 1회 갱신
+            switch locationManager.authorizationStatus {
+            case .notDetermined:
+                locationManager.requestPermission()
+            case .authorizedWhenInUse, .authorizedAlways:
+                if locationManager.userLocation == nil {
+                    locationManager.requestLocation()
+                }
+            default:
+                break
+            }
+            // 2) 현재 가용한 좌표로 즉시 로드 (좌표 없으면 서울 폴백)
+            await reloadIndex()
+        }
+        // 위치가 들어오면(또는 바뀌면) 해당 좌표로 재조회 — "다른 지역인데 서울로 표시" 버그 방지
+        .onChange(of: locationManager.userLocation) { _, _ in
+            Task { await reloadIndex() }
         }
         .fullScreenCover(isPresented: $showForecast) {
-            WashForecastView()
+            WashForecastView(initialLocation: locationManager.userLocation)
+        }
+    }
+
+    /// 현재 LocationManager 좌표로 세차지수 로드. 좌표 미확보 시 서울 기본값.
+    private func reloadIndex() async {
+        if let coord = locationManager.userLocation {
+            await washIndexService.loadWashIndex(
+                latitude: coord.latitude,
+                longitude: coord.longitude
+            )
+        } else {
+            await washIndexService.loadWashIndex()
         }
     }
 

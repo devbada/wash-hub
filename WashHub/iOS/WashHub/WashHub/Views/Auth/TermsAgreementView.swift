@@ -211,7 +211,9 @@ struct TermsAgreementView: View {
 }
 
 // MARK: - 약관 URL 상수
+// 호스팅: Vercel (workspace/docs/ → project-wash-hub 프로젝트)
+// 이전: GitHub Pages (devbada.github.io/wash-hub) → 2026-05 마케팅 사이트로 통합
 enum LegalURLs {
-    static let privacyPolicy = URL(string: "https://devbada.github.io/wash-hub/privacy-policy.html")!
-    static let termsOfService = URL(string: "https://devbada.github.io/wash-hub/terms-of-service.html")!
+    static let privacyPolicy = URL(string: "https://project-wash-hub.vercel.app/privacy-policy.html")!
+    static let termsOfService = URL(string: "https://project-wash-hub.vercel.app/terms-of-service.html")!
 }

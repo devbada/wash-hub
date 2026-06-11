@@ -148,8 +148,10 @@ struct HomeView: View {
 
             let cols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
             LazyVGrid(columns: cols, spacing: 10) {
+                // TODO-minam: 실제 기기에서 흰 카드끼리 구분되는지 확인해 주세요.
                 quickCard(icon: "map.fill", title: "근처 세차장", hint: "지도에서 찾기",
-                          bg: Color.theme.accent, fg: Color.theme.onAccent) { onSelectTab(1) }
+                          bg: Color.theme.surfaceLowest, fg: Color.theme.textPrimary,
+                          iconTint: Color.theme.accent) { onSelectTab(1) }
                 quickCard(icon: "drop.fill", title: "세차용품", hint: "샴푸 · 왁스 · 코팅",
                           bg: Color.theme.surfaceLowest, fg: Color.theme.textPrimary) { onSelectTab(3) }
                 quickCard(icon: "list.bullet.clipboard.fill", title: "세차 잘하는 법", hint: washTipHint,
@@ -162,12 +164,13 @@ struct HomeView: View {
     }
 
     private func quickCard(icon: String, title: String, hint: String,
-                           bg: Color, fg: Color, action: @escaping () -> Void) -> some View {
+                           bg: Color, fg: Color, iconTint: Color? = nil,
+                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: icon)
-                    .font(.system(size: 60))
-                    .foregroundColor(fg)
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(iconTint ?? fg)
                 Spacer(minLength: 12)
                 Text(title)
                     .font(.appCaptionBold)
@@ -181,12 +184,6 @@ struct HomeView: View {
             .padding(16)
             .background(bg)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            // v2 가독성(B안) — 고스트 보더 + 옅은 그림자로 밝은 배경에서 카드 분리
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(Color.theme.outlineVariant, lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
         }
         .buttonStyle(HomePressStyle())
     }

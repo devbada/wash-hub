@@ -32,6 +32,7 @@ enum DrawerDestination {
 struct HamburgerDrawerView: View {
     let isOpen: Bool
     let userName: String
+    let isGuest: Bool
     let onClose: () -> Void
     let onGo: (DrawerDestination) -> Void
 
@@ -138,7 +139,8 @@ struct HamburgerDrawerView: View {
         let cols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
         return LazyVGrid(columns: cols, spacing: 10) {
             bigCard(icon: "cloud.sun.fill", title: "오늘 세차할까?", hint: "세차 예측 보기",
-                    bg: Color.theme.accent, fg: Color.theme.onAccent, dest: .washIndex)
+                    bg: Color.theme.surfaceLowest, fg: Color.theme.textPrimary,
+                    iconTint: Color.theme.accent, dest: .washIndex)
             bigCard(icon: "map.fill", title: "어디서 세차하지?", hint: "근처 세차장",
                     bg: Color.theme.primary, fg: Color.theme.onPrimary, dest: .map)
             bigCard(icon: "drop.fill", title: "뭐로 세차하지?", hint: "케미컬 · 루틴",
@@ -149,12 +151,13 @@ struct HamburgerDrawerView: View {
     }
 
     private func bigCard(icon: String, title: String, hint: String,
-                         bg: Color, fg: Color, dest: DrawerDestination) -> some View {
+                         bg: Color, fg: Color, iconTint: Color? = nil,
+                         dest: DrawerDestination) -> some View {
         Button { onGo(dest) } label: {
             VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: icon)
-                    .font(.system(size: 68))
-                    .foregroundColor(fg)
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(iconTint ?? fg)
                 Spacer(minLength: 14)
                 Text(title)
                     .font(.appCaptionBold)
@@ -169,12 +172,6 @@ struct HamburgerDrawerView: View {
             .padding(16)
             .background(bg)
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            // v2 가독성(B안) — 고스트 보더 + 옅은 그림자로 밝은 배경에서 카드 분리
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.theme.outlineVariant, lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
         }
         .buttonStyle(DrawerPressStyle())
     }
@@ -237,7 +234,11 @@ struct HamburgerDrawerView: View {
         HStack(spacing: 0) {
             footerItem(icon: "gearshape", label: "설정", dest: .settings)
             footerItem(icon: "questionmark.circle", label: "도움말", dest: .help)
-            footerItem(icon: "rectangle.portrait.and.arrow.right", label: "로그아웃", dest: .logout)
+            footerItem(
+                icon: "rectangle.portrait.and.arrow.right",
+                label: isGuest ? "둘러보기 끝내기" : "로그아웃",
+                dest: .logout
+            )
         }
         .padding(.horizontal, 22)
         .padding(.top, 14)
@@ -274,6 +275,7 @@ private struct DrawerPressStyle: ButtonStyle {
     HamburgerDrawerView(
         isOpen: true,
         userName: "재가입농장",
+        isGuest: true,
         onClose: {},
         onGo: { _ in }
     )

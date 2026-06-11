@@ -121,6 +121,7 @@ struct HomeTabView: View {
             HamburgerDrawerView(
                 isOpen: showDrawer,
                 userName: userName,
+                isGuest: authManager.isGuest,
                 onClose: { showDrawer = false },
                 onGo: handleDrawer
             )
@@ -178,8 +179,12 @@ struct HomeTabView: View {
             // 통합 검색 화면
             showSearch = true
         case .logout:
-            // 로그아웃 — 확인 알림 후 실행
-            showLogoutConfirm = true
+            if authManager.isGuest {
+                // TODO-minam: 둘러보기 끝내기 선택 시 로그인 화면으로 바로 이동하는지 확인해 주세요.
+                authManager.exitGuestMode()
+            } else {
+                showLogoutConfirm = true
+            }
         }
     }
 
@@ -191,6 +196,16 @@ struct HomeTabView: View {
             navCoordinator.feedPath.removeLast(navCoordinator.feedPath.count)
         }
         navCoordinator.feedPath.append(target)
+    }
+
+    private func openMyPage() {
+        guard authManager.isAuthenticated, !authManager.isGuest else {
+            showLoginAlert = true
+            return
+        }
+
+        // TODO-minam: 둘러보기 모드에서 홈 프로필 아이콘을 눌렀을 때 로그인 안내만 노출되는지 확인해야 합니다.
+        showMyPage = true
     }
 
     /// 하단 UI 숨김 여부 — 강제(댓글/루틴) 또는 스크롤 기반 자동 숨김 둘 중 하나라도 true 면 숨김
@@ -208,7 +223,7 @@ struct HomeTabView: View {
                     userName: userName,
                     onMenu: { showDrawer = true },
                     onNotifications: { showNotifications = true },
-                    onMyPage: { showMyPage = true },
+                    onMyPage: openMyPage,
                     onSelectTab: { selectedTab = $0 },
                     onRoutines: { pushToHome(.routines) },
                     onOpenFeed: { pushToHome(.feedList) }
@@ -378,46 +393,19 @@ struct HomeTabView: View {
         Button(action: handleCreateTap) {
             ZStack {
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.theme.accent.opacity(0.35),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 30,
-                            endRadius: 50
-                        )
-                    )
-                    .frame(width: 96, height: 96)
-                    .blur(radius: 6)
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.theme.accentBright,
-                                Color.theme.accent
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.theme.primary)
                     .frame(width: 64, height: 64)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.35), lineWidth: 2)
-                    )
-                    .shadow(color: Color.theme.accent.opacity(0.5), radius: 16, x: 0, y: 8)
-                    .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+                    .shadow(color: Color.theme.textPrimary.opacity(0.16), radius: 12, x: 0, y: 6)
 
                 Image(systemName: "plus")
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.theme.onAccent)
+                    .foregroundColor(.theme.onPrimary)
             }
+            .frame(width: 96, height: 96)
         }
         .buttonStyle(FABPressStyle())
         .coachmarkAnchor(CoachmarkAnchorID.fabCreate)
+        // TODO-minam: 홈과 피드 화면에서 Carbon FAB가 탭바와 충분히 구분되는지 확인해 주세요.
     }
 
     private func handleCreateTap() {

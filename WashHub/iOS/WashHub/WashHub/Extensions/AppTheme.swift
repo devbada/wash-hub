@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// 사용자가 설정에서 고를 수 있는 앱 테마 (Design System v3 — 12종)
+/// 앱에서 사용할 수 있는 색상 팔레트.
 ///
-/// rawValue 는 디자인 시스템/웹과 동일한 id 문자열을 사용한다.
-/// 기존 4종 + pastel-explore 5종 + mono-explore 3종 = 총 12종.
+/// `readableNeutral`이 현재 고정 기본 테마다.
+/// 나머지 팔레트는 기존 저장값 마이그레이션 기간 동안 보존한다.
 enum AppTheme: String, CaseIterable, Identifiable {
-    // 기존 4종
+    case readableNeutral = "readable-neutral"
+    // 레거시 12종
     case periwinkle
     case mistyBlue = "misty-blue"
     case sage
@@ -26,6 +27,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     /// 이 테마의 색상 팔레트
     var colors: ColorTheme {
         switch self {
+        case .readableNeutral: return .readableNeutral
         case .periwinkle:  return .periwinkle
         case .mistyBlue:   return .mistyBlue
         case .sage:        return .sage
@@ -44,6 +46,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     /// 한글 이름
     var nameKo: String {
         switch self {
+        case .readableNeutral: return "뉴트럴 올리브"
         case .periwinkle:  return "페리윙클 크림"
         case .mistyBlue:   return "미스티 블루 피치"
         case .sage:        return "세이지 라벤더"
@@ -62,6 +65,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     /// 영문 이름
     var nameEn: String {
         switch self {
+        case .readableNeutral: return "Neutral Olive"
         case .periwinkle:  return "Periwinkle Cream"
         case .mistyBlue:   return "Misty Blue Peach"
         case .sage:        return "Sage Lavender"
@@ -80,6 +84,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     /// 한 줄 무드 카피
     var mood: String {
         switch self {
+        case .readableNeutral: return "선명한 무채색에 필요한 상태만 올리브로"
         case .periwinkle:  return "몽글한 라벤더 블루 · 부드럽고 친근한 일상"
         case .mistyBlue:   return "안개 낀 새벽처럼 차분한 · 청결하고 신뢰감 있는"
         case .sage:        return "자연을 가까이 · 내추럴하고 안 질리는"

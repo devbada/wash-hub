@@ -32,29 +32,31 @@ struct MyPageView: View {
         ZStack {
             Color.theme.surface.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    // 프로필 헤더
-                    profileHeader
+            if authManager.isAuthenticated && !authManager.isGuest {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // 프로필 헤더
+                        profileHeader
 
-                    // 내 세차 리듬 (P3-012) — 차량 주기 + 노선도 + 다음 세차일
-                    if !authManager.isGuest {
+                        // 내 세차 리듬 (P3-012) — 차량 주기 + 노선도 + 다음 세차일
                         WashRhythmCard()
+
+                        // 뱃지 섹션
+                        badgeSection
+
+                        // 탭 전환: 내 피드 / 좋아요
+                        feedTabs
+
+                        // 설정
+                        settingsSection
+
+                        // 마지막 항목(회원탈퇴)이 탭바에 가려지지 않도록 가상 빈 아이템
+                        BottomTabBarSpacer()
                     }
-
-                    // 뱃지 섹션
-                    badgeSection
-
-                    // 탭 전환: 내 피드 / 좋아요
-                    feedTabs
-
-                    // 설정
-                    settingsSection
-
-                    // 마지막 항목(회원탈퇴)이 탭바에 가려지지 않도록 가상 빈 아이템
-                    BottomTabBarSpacer()
+                    .padding(16)
                 }
-                .padding(16)
+            } else {
+                loginRequiredContent
             }
         }
         .navigationTitle("마이페이지")
@@ -116,11 +118,46 @@ struct MyPageView: View {
             LegalDocumentView(title: "개인정보처리방침", url: LegalURLs.privacyPolicy)
         }
         .task {
+            guard authManager.isAuthenticated, !authManager.isGuest else {
+                isLoading = false
+                return
+            }
             await loadData()
             await checkBadges()
         }
         .onReceive(NotificationCenter.default.publisher(for: .feedCreated)) { _ in
+            guard authManager.isAuthenticated, !authManager.isGuest else { return }
             Task { await loadData() }
+        }
+    }
+
+    private var loginRequiredContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(.system(size: 52, weight: .light))
+                .foregroundColor(.theme.textDisabled)
+
+            VStack(spacing: 8) {
+                Text("마이페이지는 로그인 후 볼 수 있어요")
+                    .font(.appHeadline2)
+                    .foregroundColor(.theme.textPrimary)
+
+                Text("내 기록과 계정 설정은 로그인하면 확인할 수 있어요.")
+                    .font(.appCaption)
+                    .foregroundColor(.theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button("로그인하기") {
+                authManager.exitGuestMode()
+            }
+            .font(.appBodyMedium)
+            .foregroundColor(.theme.onPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Color.theme.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 32)
         }
     }
 
@@ -542,23 +579,6 @@ struct MyPageView: View {
     // MARK: - 설정
     private var settingsSection: some View {
         VStack(spacing: 8) {
-            // 테마 변경 — 4종 파스텔 테마 선택
-            NavigationLink {
-                ThemeSelectionView()
-            } label: {
-                HStack {
-                    Text("테마 변경")
-                        .font(.appBody)
-                        .foregroundColor(.theme.textSecondary)
-                    Spacer()
-                    Image(systemName: "paintpalette")
-                        .foregroundColor(.theme.textDisabled)
-                }
-                .padding(16)
-                .cardStyle()
-            }
-            .buttonStyle(.plain)
-
             // 도움말 다시 보기 — 첫 사용자 코치마크 강제 재실행
             Button(action: replayCoachmark) {
                 HStack {
