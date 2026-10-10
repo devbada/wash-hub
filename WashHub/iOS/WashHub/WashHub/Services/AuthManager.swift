@@ -14,6 +14,12 @@ final class AuthManager: ObservableObject {
     @Published var currentUser: Profile?
     /// 탈퇴 처리된 계정으로 로그인 시도 시 표시할 안내 (nil 아니면 alert 노출)
     @Published var deletedAccountAlertMessage: String?
+    /// 서비스 종료 준비 기간에는 새 OAuth 계정이 온보딩으로 진입하지 않도록 표시할 안내
+    @Published var registrationClosedAlertMessage: String?
+
+    /// 신규 가입 중단은 반드시 Supabase Auth/DB에서도 강제해야 한다.
+    /// 이 값은 OAuth 인증이 끝난 뒤 새 계정의 온보딩 진입을 막는 앱 측 보조 방어선이다.
+    private let isNewRegistrationClosed = true
 
     /// 게스트 모드 여부 (로그인 없이 둘러보기)
     var isGuest: Bool { isGuestMode && !isAuthenticated }
@@ -37,6 +43,7 @@ final class AuthManager: ObservableObject {
             await loadProfile(userId: session.user.id.uuidString)
         } catch {
             isAuthenticated = false
+            currentUser = nil
         }
         isLoading = false
     }
@@ -171,21 +178,44 @@ final class AuthManager: ObservableObject {
                 return
             }
 
+            let requiresTermsAgreement = persistProfile.agreedTermsAt == nil
+            let requiresNicknameSetup = persistProfile.nickname == nil
+                || persistProfile.nickname == persistProfile.username
+
+            // 신규 가입은 서버에서 최종 차단한다. 앱에서도 약관/닉네임 온보딩이 필요한
+            // 세션은 계속 진행시키지 않아, OAuth 인증만으로 새 프로필이 완성되지 않게 한다.
+            guard !isNewRegistrationClosed || (!requiresTermsAgreement && !requiresNicknameSetup) else {
+                await blockNewRegistration()
+                return
+            }
+
             currentUser = persistProfile
-            // 약관 미동의 시 약관 동의 화면으로
-            needsTermsAgreement = (persistProfile.agreedTermsAt == nil)
-            // 닉네임이 이메일과 같거나 nil이면 닉네임 설정 필요
-            needsNicknameSetup = (persistProfile.nickname == nil
-                || persistProfile.nickname == persistProfile.username)
+            needsTermsAgreement = requiresTermsAgreement
+            needsNicknameSetup = requiresNicknameSetup
         } catch {
             print("Profile load error (profiles 행 미존재 가능): \(error)")
-            // profiles 행이 없어도 임시 Profile 으로 currentUser 를 채워 NicknameSetupView 가 동작하도록 함
-            // updateNickname 에서 upsert 로 실제 행이 생성됨
-            let fallbackProfile = buildFallbackProfile(userId: userId)
-            currentUser = fallbackProfile
-            needsTermsAgreement = true
-            needsNicknameSetup = true
+            if isNewRegistrationClosed {
+                await blockNewRegistration()
+            } else {
+                // profiles 행이 없어도 임시 Profile 으로 currentUser 를 채워 NicknameSetupView 가 동작하도록 함
+                // updateNickname 에서 upsert 로 실제 행이 생성됨
+                let fallbackProfile = buildFallbackProfile(userId: userId)
+                currentUser = fallbackProfile
+                needsTermsAgreement = true
+                needsNicknameSetup = true
+            }
         }
+    }
+
+    /// OAuth 제공자는 로그인 전 신규/기존 계정을 클라이언트에 알려주지 않는다.
+    /// 따라서 프로필이 없거나 가입 온보딩이 필요한 세션은 서버 정책 위반으로 간주하고 종료한다.
+    private func blockNewRegistration() async {
+        try? await supabase.auth.signOut()
+        isAuthenticated = false
+        currentUser = nil
+        needsTermsAgreement = false
+        needsNicknameSetup = false
+        registrationClosedAlertMessage = "서비스 종료 준비에 따라 신규 회원가입이 종료되었습니다. 기존 회원은 이전에 사용한 Apple 또는 Google 계정으로 로그인할 수 있으며, 앱 내 회원 탈퇴도 계속 이용할 수 있습니다."
     }
 
     /// Auth 세션에서 최소한의 임시 Profile을 구성 (profiles 행 미존재 시 방어)
@@ -267,6 +297,7 @@ final class AuthManager: ObservableObject {
 
         await loadProfile(userId: userId)
         needsNicknameSetup = false
+        registrationClosedAlertMessage = nil
     }
 
     // MARK: - 닉네임 중복 검사

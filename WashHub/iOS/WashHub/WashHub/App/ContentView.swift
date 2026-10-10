@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    /// 종료 안내는 1.1.3 이상을 처음 실행한 모든 설치자에게 한 번 표시한다.
+    @AppStorage("serviceSunsetNoticeAcknowledged") private var hasAcknowledgedServiceSunsetNotice = false
 
     var body: some View {
         Group {
@@ -20,6 +22,15 @@ struct ContentView: View {
                 HomeTabView()
             } else {
                 LoginView()
+            }
+        }
+        .overlay {
+            if !authManager.isLoading && !hasAcknowledgedServiceSunsetNotice {
+                ServiceSunsetNoticeView {
+                    hasAcknowledgedServiceSunsetNotice = true
+                }
+                .transition(.opacity)
+                .zIndex(1)
             }
         }
         .task {

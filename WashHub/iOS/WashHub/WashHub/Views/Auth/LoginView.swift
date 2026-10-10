@@ -41,6 +41,12 @@ struct LoginView: View {
 
                 // 로그인 버튼 영역
                 VStack(spacing: 12) {
+                    Text("신규 회원가입은 종료되었습니다. 기존 회원은 이전에 사용한 Apple 또는 Google 계정으로 로그인할 수 있으며, 회원 탈퇴는 서비스 종료일까지 앱에서 이용할 수 있습니다.")
+                        .font(.appSmall)
+                        .foregroundColor(.theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     // Apple 로그인 — Apple HIG 가이드라인 준수
                     SignInWithAppleButton(.signIn) { request in
                         let appleRequest = authManager.prepareAppleSignIn()
@@ -116,6 +122,16 @@ struct LoginView: View {
         } message: {
             Text(authManager.deletedAccountAlertMessage ?? "")
         }
+        .alert("신규 회원가입 종료", isPresented: Binding(
+            get: { authManager.registrationClosedAlertMessage != nil },
+            set: { if !$0 { authManager.registrationClosedAlertMessage = nil } }
+        )) {
+            Button("확인", role: .cancel) {
+                authManager.registrationClosedAlertMessage = nil
+            }
+        } message: {
+            Text(authManager.registrationClosedAlertMessage ?? "")
+        }
     }
 
     // MARK: - Apple 로그인 처리
@@ -142,7 +158,7 @@ struct LoginView: View {
                 }
             } catch {
                 print("Apple login error: \(error)")
-                errorMessage = "Apple 로그인에 실패했습니다. 다시 시도해주세요."
+                errorMessage = "Apple 로그인에 실패했습니다. 기존 회원은 이전에 사용한 Apple 계정으로 다시 시도해주세요. 신규 회원가입은 종료되었습니다."
             }
             isLoading = false
         }
@@ -161,7 +177,7 @@ struct LoginView: View {
                 print("OAuth flow: \(error)")
                 await authManager.checkSession()
                 if !authManager.isAuthenticated {
-                    errorMessage = "로그인에 실패했습니다. 다시 시도해주세요."
+                    errorMessage = "로그인에 실패했습니다. 기존 회원은 이전에 사용한 Google 계정으로 다시 시도해주세요. 신규 회원가입은 종료되었습니다."
                 }
             }
             isLoading = false

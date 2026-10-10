@@ -58,17 +58,11 @@ WashHub와 함께 더 즐거운 세차 생활을 시작하세요!
 세차,세차기록,세차용품,케미컬,세차장,카워시,디테일링,세차커뮤니티,차량관리,자동차,세차루틴,세차리뷰,Before After,워시허브
 
 ### 새로운 기능 (릴리스 노트)
-WashHub의 첫 번째 버전을 소개합니다!
+WashHub 서비스 종료 안내를 추가했습니다.
 
-• 세차 피드: Before/After 사진과 함께 세차 기록 공유
-• 케미컬 정보 & 리뷰: 세차 용품 리뷰 확인
-• 세차장 정보: 주변 세차장 위치와 이용 후기
-• 내차 관리: 차량 등록 및 세차 기록
-• 세차 루틴: 나만의 세차 순서 만들기
-• 뱃지 시스템: 활동 기반 뱃지 수집
-• 팔로우 & 통합 검색
-• 세차지수: 날씨 기반 세차 적합도 안내
-• AI 얼굴 모자이크: 프라이버시 보호 기능
+• 신규 회원가입이 종료되었습니다. 기존 회원은 이전에 사용한 Apple 또는 Google 계정으로 로그인할 수 있습니다.
+• 서비스는 2026년 11월 9일 23:59(KST)에 종료됩니다. 종료일까지 기존 기능과 앱 내 회원 탈퇴를 이용할 수 있습니다.
+• 앱 실행 시 서비스 종료일과 개인정보 문의 방법을 안내합니다.
 
 ---
 
@@ -119,17 +113,11 @@ Start your happier car wash journey with WashHub!
 car wash,detailing,auto care,wash log,chemical review,car wash spot,wash routine,community,car care
 
 ### What's New
-Introducing the first version of WashHub!
+Added a service termination notice.
 
-• Car Wash Feed: Share Before/After wash records
-• Chemical Info & Reviews: Browse wash product reviews
-• Car Wash Spots: Find nearby locations with reviews
-• My Car Management: Register vehicles and track washes
-• Wash Routines: Build step-by-step wash sequences
-• Badge System: Earn activity-based badges
-• Follow & Universal Search
-• Wash Index: Weather-based wash suitability
-• AI Face Mosaic: Privacy protection feature
+• New registration has ended. Existing members can sign in with their previous Apple or Google account.
+• The service ends at 23:59 KST on November 9, 2026. Existing features and in-app account deletion remain available until then.
+• Shows the service end date and privacy inquiry contact at launch.
 
 ---
 
@@ -140,7 +128,8 @@ Introducing the first version of WashHub!
 - **데모 계정:** (Apple 로그인 또는 Google 로그인으로 테스트)
 - **심사 참고사항:**
   - 이 앱은 세차 커뮤니티 소셜 네트워킹 앱입니다.
-  - 로그인은 Apple/Google 소셜 로그인만 지원합니다.
+  - 서비스 종료 준비에 따라 신규 회원가입은 종료되었습니다.
+  - 기존 회원은 이전에 사용한 Apple 또는 Google 계정으로 로그인하여 서비스 종료일까지 기존 기능과 앱 내 회원 탈퇴를 이용할 수 있습니다.
   - "둘러보기" 모드로 로그인 없이 피드 열람이 가능합니다.
   - 사용자 생성 콘텐츠(UGC)가 포함되며, 신고/차단 기능이 있습니다.
   - 이미지 내 얼굴 감지는 Vision 프레임워크를 사용하며, 모든 처리가 온-디바이스에서 이루어집니다.
